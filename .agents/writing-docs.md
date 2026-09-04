@@ -1,12 +1,12 @@
 # Writing docs pages
 
-Every skill in `engineering/` and `productivity/` has a human-facing **docs page** at `docs/<bucket>/<skill-name>.md` — the docs tree mirrors those two bucket folders under `skills/`. Upstream-published pages live at `https://aihero.dev/skills-<skill-name>`; pages owned only by this fork live in `tt-a1i/matt-skills-with-to-goal` until the fork controls a docs host of its own. The page is not the skill and not a copy of `SKILL.md`. Only these two buckets are promoted; the rest (`misc/`, `in-progress/`, `deprecated/`) ship no docs page.
+Every skill in `engineering/` and `productivity/` has a human-facing **docs page** at `docs/<bucket>/<skill-name>.md` — the docs tree mirrors those two bucket folders under `skills/`. Upstream-published pages live at `https://aihero.dev/skills-<skill-name>`; pages owned only by this fork live in `opsbli/sam-skills` until the fork controls a docs host of its own. The page is not the skill and not a copy of `SKILL.md`. Only these two buckets are promoted; the rest (`misc/`, `in-progress/`, `deprecated/`) ship no docs page.
 
 Most of these skills are **user-invoked**: the agent will never fire them for you, so *you* are the index that has to remember they exist and when to reach for them. That memory is **cognitive load**. The job of a docs page is to relieve it — to orient one reader around one skill so they can hold it in their head, know when to reach for it, and see where it sits in the system. The pages are collectively a distributed router; each is a node.
 
 Act whenever a promoted skill is added, renamed, or has its behaviour changed: create or re-sync its docs page. A rename moves the file too (`docs/<bucket>/<old>.md` → `docs/<bucket>/<new>.md`), because the published URL tracks the name; a skill that moves between `engineering/` and `productivity/` moves its docs file to the matching folder. Skills in `misc/`, `in-progress/`, and `deprecated/` get no page — none of those buckets is promoted. A skill moving *out* of one of them into `engineering/` or `productivity/` gains a page; one moving the other way loses it.
 
-Because these pages are published on `aihero.dev`, **every link is absolute** — never a repo-relative path. A link to another upstream-published skill points at `https://aihero.dev/skills-<name>`. A link into fork-owned material points at its full `https://github.com/tt-a1i/matt-skills-with-to-goal/...` URL; use the upstream repository URL only when the linked material exists solely upstream. A relative link that works in the repo breaks once published.
+Because these pages are published on `aihero.dev`, **every link is absolute** — never a repo-relative path. A link to another upstream-published skill points at `https://aihero.dev/skills-<name>`. A link into fork-owned material points at its full `https://github.com/opsbli/sam-skills/...` URL; use the upstream repository URL only when the linked material exists solely upstream. A relative link that works in the repo breaks once published.
 
 There is no H1 — the published page takes its title from the slug.
 
@@ -48,7 +48,7 @@ The questions readers really ask about this skill, each in bold with the answer 
 An observed question always beats an invented one, so go and find them before you write any:
 
 - **The wiki.** If `~/repos/matt/personal-wiki` exists on this machine, it is the richest source there is. Its `wiki/audience/` area is organised around what the audience wants, discusses, and **is confused by** — read `wiki/index.md` first for the registry of pages, then the pages bearing on this skill. Every page carries `sources:` linkbacks to the original X, Discord, GitHub, and email threads; the wiki is a secondary source, so quote the asker's own question rather than the wiki's summary of it. Skip this bullet where the directory does not exist.
-- **Repository issues.** Search this fork first with `gh issue list --repo tt-a1i/matt-skills-with-to-goal --search "<skill-name>" --state all`, then search inherited upstream discussion with `gh issue list --repo mattpocock/skills --search "<skill-name>" --state all`. A question filed twice is a question the page owes an answer to.
+- **Repository issues.** Search this fork first with `gh issue list --repo opsbli/sam-skills --search "<skill-name>" --state all`, then search inherited upstream discussion with `gh issue list --repo mattpocock/skills --search "<skill-name>" --state all`. A question filed twice is a question the page owes an answer to.
 - **`CHANGELOG.md`.** Anything renamed, moved, or behaviourally changed generates a "where did it go?" that the page has to answer.
 
 Where the hunt comes up thin, the section may also carry a question a reader would plainly ask — but **the count stays honest to the evidence**. A well-discussed skill earns six; an obscure one earns one or two, or none at all. Padding a thin skill out to match a rich one is how the section fills with questions nobody has, and an invented question teaches the reader nothing.
@@ -94,7 +94,7 @@ Always present. Situate the skill in the system in a sentence or two:
 - Every `## It's working if` bullet is checkable without opening `SKILL.md`.
 - The sections appear in the template's order.
 - Every link is absolute, and every one resolves.
-- Every cross-skill link owned only by this fork uses the full `tt-a1i/matt-skills-with-to-goal` GitHub URL until the fork controls a published docs host; `aihero.dev` is reserved for upstream-published skills.
+- Every cross-skill link owned only by this fork uses the full `opsbli/sam-skills` GitHub URL until the fork controls a published docs host; `aihero.dev` is reserved for upstream-published skills.
 
 ## Durability check for a fork-owned skill
 

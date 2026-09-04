@@ -11,7 +11,7 @@
 让规划线程专注于把事情想清楚，让执行线程专注于把事情做完。
 
 [![Upstream](https://img.shields.io/badge/upstream-mattpocock%2Fskills%20v1.2.3-171717?style=flat-square)](https://github.com/mattpocock/skills)
-[![Fork](https://img.shields.io/badge/fork-v1.2.3--to--goal.2-F35B2A?style=flat-square)](https://github.com/tt-a1i/matt-skills-with-to-goal)
+[![Fork](https://img.shields.io/badge/fork-v1.2.3--to--goal.2-F35B2A?style=flat-square)](https://github.com/opsbli/sam-skills)
 [![Install](https://img.shields.io/badge/install-npx%20skills-F35B2A?style=flat-square)](#安装)
 [![License](https://img.shields.io/badge/license-MIT-DCF23E?style=flat-square&labelColor=171717)](LICENSE)
 
@@ -71,14 +71,14 @@ flowchart LR
 Claude Code 可以把本仓库作为独立 marketplace 安装：
 
 ```bash
-claude plugin marketplace add tt-a1i/matt-skills-with-to-goal
-claude plugin install matt-skills-with-to-goal@tt-a1i
+claude plugin marketplace add opsbli/sam-skills
+claude plugin install matt-skills-with-to-goal@opsbli
 ```
 
 Codex 和其他支持 Agent Skills 的工具使用 `skills.sh`：
 
 ```bash
-npx skills@latest add tt-a1i/matt-skills-with-to-goal
+npx skills@latest add opsbli/sam-skills
 ```
 
 两种方式选一种，避免同一个 Skill 被重复加载。本仓库维护者可运行 `npm run sync:local`，把工作树安全同步到统一的 `~/.agents_skills/` 并刷新 Hermes。

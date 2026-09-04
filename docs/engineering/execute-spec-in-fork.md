@@ -11,8 +11,8 @@ Type `/execute-spec-in-fork` when the current Codex App task has an approved spe
 | Situation | Route |
 |---|---|
 | Final spec, coherent conversation, one execution session | Run `execute-spec-in-fork` |
-| Same contract, but the [harness](https://www.aihero.dev/ai-coding-dictionary/harness) cannot fork or message Codex tasks (ZCode, Claude Code, Cursor, terminals) | Follow the skill's manual fallback runbook: new session on the same workspace → paste `SPEC READY` → run [spec-executor](https://github.com/tt-a1i/matt-skills-with-to-goal/blob/main/docs/engineering/spec-executor.md) → bring the receipt back (`#sess_<id>` in ZCode) |
-| Several slices, parallel work, or delayed execution | Use [to-tickets](https://aihero.dev/skills-to-tickets) and [to-goal](https://github.com/tt-a1i/matt-skills-with-to-goal/blob/main/docs/engineering/to-goal.md) |
+| Same contract, but the [harness](https://www.aihero.dev/ai-coding-dictionary/harness) cannot fork or message Codex tasks (ZCode, Claude Code, Cursor, terminals) | Follow the skill's manual fallback runbook: new session on the same workspace → paste `SPEC READY` → run [spec-executor](https://github.com/opsbli/sam-skills/blob/main/docs/engineering/spec-executor.md) → bring the receipt back (`#sess_<id>` in ZCode) |
+| Several slices, parallel work, or delayed execution | Use [to-tickets](https://aihero.dev/skills-to-tickets) and [to-goal](https://github.com/opsbli/sam-skills/blob/main/docs/engineering/to-goal.md) |
 | Decisions remain unresolved | Return to [to-spec](https://aihero.dev/skills-to-spec) |
 
 ## Prerequisites
@@ -21,7 +21,7 @@ The current task needs a final `SPEC READY`, Codex App's native task tools, and 
 
 ## Harness dependency and fallback
 
-The automatic loop is a Codex App adapter. Missing the native task tools or Messenger v2+, the skill refuses to simulate the transport and hands over the **manual fallback runbook** — a first-class route for ZCode, Claude Code, Cursor, and plain terminals: freeze the planning thread at the final `SPEC READY`, open a new session on the same workspace, paste the block, run [spec-executor](https://github.com/tt-a1i/matt-skills-with-to-goal/blob/main/docs/engineering/spec-executor.md), then bring the receipt back (in ZCode, reference the execution session as `#sess_<id>`) and validate it against the same six gates. After that receipt is pasted back, it asks once for `Goal / spec quality`; a skip does not block using the receipt. Task-API churn is paid in the capability map and, if needed, a rewrite of this adapter — not a cross-harness layer. Recorded in [ADR 0003](https://github.com/tt-a1i/matt-skills-with-to-goal/blob/main/.agents/adr/0003-codex-app-fork-loop-is-an-adapter.md).
+The automatic loop is a Codex App adapter. Missing the native task tools or Messenger v2+, the skill refuses to simulate the transport and hands over the **manual fallback runbook** — a first-class route for ZCode, Claude Code, Cursor, and plain terminals: freeze the planning thread at the final `SPEC READY`, open a new session on the same workspace, paste the block, run [spec-executor](https://github.com/opsbli/sam-skills/blob/main/docs/engineering/spec-executor.md), then bring the receipt back (in ZCode, reference the execution session as `#sess_<id>`) and validate it against the same six gates. After that receipt is pasted back, it asks once for `Goal / spec quality`; a skip does not block using the receipt. Task-API churn is paid in the capability map and, if needed, a rewrite of this adapter — not a cross-harness layer. Recorded in [ADR 0003](https://github.com/opsbli/sam-skills/blob/main/.agents/adr/0003-codex-app-fork-loop-is-an-adapter.md).
 
 ## One command, two tasks
 
@@ -77,4 +77,4 @@ No. The archive bar is still a completed, parseable receipt with evidenced crite
 
 ## Where it fits
 
-`execute-spec-in-fork` is the Codex App adapter between [to-spec](https://aihero.dev/skills-to-spec) and [spec-executor](https://github.com/tt-a1i/matt-skills-with-to-goal/blob/main/docs/engineering/spec-executor.md). [to-goal](https://github.com/tt-a1i/matt-skills-with-to-goal/blob/main/docs/engineering/to-goal.md) remains the portable route when context must cross days, agents, or harnesses. Use [ask-matt](https://aihero.dev/skills-ask-matt) when choosing between them.
+`execute-spec-in-fork` is the Codex App adapter between [to-spec](https://aihero.dev/skills-to-spec) and [spec-executor](https://github.com/opsbli/sam-skills/blob/main/docs/engineering/spec-executor.md). [to-goal](https://github.com/opsbli/sam-skills/blob/main/docs/engineering/to-goal.md) remains the portable route when context must cross days, agents, or harnesses. Use [ask-matt](https://aihero.dev/skills-ask-matt) when choosing between them.

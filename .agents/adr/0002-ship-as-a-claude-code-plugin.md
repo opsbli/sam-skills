@@ -42,11 +42,11 @@ Verified 2026-08-05, on Claude Code 2.1.222, against the live listing:
 
 ## Fork update, 2026-08-10
 
-The upstream official-marketplace facts above apply only to `mattpocock/skills`. This fork ships a distinct plugin named `matt-skills-with-to-goal`, sourced from `tt-a1i/matt-skills-with-to-goal`, so it cannot claim the upstream official listing or its automatic update channel.
+The upstream official-marketplace facts above apply only to `mattpocock/skills`. This fork ships a distinct plugin named `matt-skills-with-to-goal`, sourced from `opsbli/sam-skills`, so it cannot claim the upstream official listing or its automatic update channel.
 
 Fork users choose one of two routes:
 
-- Claude Code: add this repository as marketplace `tt-a1i`, then install `matt-skills-with-to-goal@tt-a1i`.
-- Codex and other Agent Skills harnesses: install the fork with `npx skills@latest add tt-a1i/matt-skills-with-to-goal`.
+- Claude Code: add this repository as marketplace `opsbli`, then install `matt-skills-with-to-goal@opsbli`.
+- Codex and other Agent Skills harnesses: install the fork with `npx skills@latest add opsbli/sam-skills`.
 
 The fork version uses an upstream-derived prerelease form such as `1.2.3-to-goal.1`: `1.2.3` identifies the synchronized upstream release and the suffix identifies this distribution. Package and plugin versions remain identical.

@@ -5,7 +5,7 @@
   "description": "Matt Pocock's engineering skills with verifiable goal handoffs and automated forked spec execution",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tt-a1i/matt-skills-with-to-goal"
+    "url": "https://github.com/opsbli/sam-skills"
   },
   "license": "MIT",
   "scripts": {

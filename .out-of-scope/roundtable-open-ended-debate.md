@@ -14,4 +14,4 @@ The escape hatch is the user's own judgment. Read the verdict, sharpen the motio
 
 ## Prior requests
 
-- tt-a1i/matt-skills-with-to-goal#7 — archived retroactively. The two-round ceiling was stated in the skill's cost guardrails without its reasoning.
+- opsbli/sam-skills#7 — archived retroactively. The two-round ceiling was stated in the skill's cost guardrails without its reasoning.

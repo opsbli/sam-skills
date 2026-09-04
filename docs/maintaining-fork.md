@@ -3,9 +3,11 @@
 This repository has two remotes with different jobs:
 
 - `upstream` is `mattpocock/skills`, the source of upstream releases.
-- `origin` is `tt-a1i/matt-skills-with-to-goal`, the publication target for this fork.
+- `origin` is `opsbli/sam-skills`, the publication target for this fork.
 
-The maintained branch is an **overlay**: upstream history stays intact, and fork-specific workflow changes sit on top. A normal merge from the old `origin/main` is unsafe because that remote branch was created from an earlier unrelated flat history.
+The maintained branch is an **overlay**: upstream history stays intact, and fork-specific workflow changes sit on top.
+
+> **History note (2026-09):** `origin/main` was re-published from a fresh snapshot and currently shares no history with `upstream`. Before `sync:upstream` or `sync-drill.sh` can do real work here, graft the histories once: `git remote add upstream https://github.com/mattpocock/skills.git && git fetch upstream main --tags`, then re-root the snapshot onto the upstream tip it was cut from (v1.2.3) with `git replace --graft <root-commit> <upstream-v1.2.3-commit>` and a history-rewriting pass (`git filter-repo` or a one-time rebase). Until that graft exists, drills report "already based on current upstream/main" only vacuously — treat them as no-ops.
 
 ## Sync upstream
 
@@ -54,8 +56,12 @@ Pure wording polish on an inherited skill is rejected in review. Two mechanical 
 
 ## Publish to the fork
 
-Local `main` tracks `upstream/main` so `git pull` cannot accidentally merge the old flat `origin/main`. Publishing therefore requires an explicit destination.
+After the history graft above, keep local `main` tracking `upstream/main` so `git pull` cannot accidentally merge from the publication remote. Publishing therefore requires an explicit destination:
 
-The first publication of this rewritten history must preserve the old remote tip with a backup branch or tag, then replace `origin/main` using `--force-with-lease`. That is a one-time destructive remote operation and requires explicit user authorization at action time. Later pushes follow the normal fork history.
+```bash
+git push origin main
+```
+
+Normal pushes need no force. Only a history rewrite (the initial graft, or a later deliberate rebuild) requires `--force-with-lease`, and that is a destructive remote operation that requires explicit user authorization at action time.
 
 Never push to `upstream`.

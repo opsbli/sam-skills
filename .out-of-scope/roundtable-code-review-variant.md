@@ -14,4 +14,4 @@ The escape hatch composes the pieces that already exist. Run `code-review`, then
 
 ## Prior requests
 
-- tt-a1i/matt-skills-with-to-goal#7 — archived retroactively. `skills/engineering/roundtable/SKILL.md` carried the boundary as a one-line scope note with none of the reasoning behind it.
+- opsbli/sam-skills#7 — archived retroactively. `skills/engineering/roundtable/SKILL.md` carried the boundary as a one-line scope note with none of the reasoning behind it.

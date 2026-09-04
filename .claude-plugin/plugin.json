@@ -3,11 +3,11 @@
   "version": "1.2.3-to-goal.2",
   "description": "Matt Pocock's engineering skills with verifiable goal handoffs and automated forked spec execution.",
   "author": {
-    "name": "tt-a1i",
-    "url": "https://github.com/tt-a1i"
+    "name": "opsbli",
+    "url": "https://github.com/opsbli"
   },
-  "homepage": "https://github.com/tt-a1i/matt-skills-with-to-goal",
-  "repository": "https://github.com/tt-a1i/matt-skills-with-to-goal",
+  "homepage": "https://github.com/opsbli/sam-skills",
+  "repository": "https://github.com/opsbli/sam-skills",
   "license": "MIT",
   "keywords": [
     "engineering",

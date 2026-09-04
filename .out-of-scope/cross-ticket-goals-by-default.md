@@ -14,4 +14,4 @@ The escape hatch is the flag itself. A user running a persistent goal loop who w
 
 ## Prior requests
 
-- tt-a1i/matt-skills-with-to-goal#7 — archived retroactively. `skills/engineering/to-goal/SKILL.md` instructed the agent never to present `--all` as the normal workflow, without recording why.
+- opsbli/sam-skills#7 — archived retroactively. `skills/engineering/to-goal/SKILL.md` instructed the agent never to present `--all` as the normal workflow, without recording why.

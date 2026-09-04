@@ -16,4 +16,4 @@ The escape hatch is local and complete. The skill is a directory of prose; anyon
 
 ## Prior requests
 
-- tt-a1i/matt-skills-with-to-goal#7 — archived retroactively. The decision was made in the design discussion that introduced `roundtable` and left no trace in the repository.
+- opsbli/sam-skills#7 — archived retroactively. The decision was made in the design discussion that introduced `roundtable` and left no trace in the repository.
