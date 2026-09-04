@@ -37,7 +37,7 @@ base="$(git merge-base HEAD upstream/main)"
 upstream_tip="$(git rev-parse --short upstream/main)"
 
 if [[ "$base" == "$(git rev-parse upstream/main)" ]]; then
-  stamp="$(date +%Y-%m-%d %H:%M)"
+  stamp="$(date "+%Y-%m-%d %H:%M")"
   mkdir -p docs
   if [[ ! -f "$log_file" ]]; then
     cat > "$log_file" <<'EOF'
@@ -100,7 +100,7 @@ elif ! git ls-tree -d --name-only upstream/main skills/in-progress/ 2>/dev/null 
   collision_note="moved — implement-spec relocated upstream; check docs/upstream-collision-playbook.md"
 fi
 
-stamp="$(date +%Y-%m-%d %H:%M)"
+stamp="$(date "+%Y-%m-%d %H:%M")"
 mkdir -p docs
 if [[ ! -f "$log_file" ]]; then
   cat > "$log_file" <<'EOF'
