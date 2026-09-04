@@ -167,12 +167,13 @@ Goal
 | 已有 agent-ready ticket，要开新线程实现 | `/to-goal` |
 | 关键在别人脑子里，需要问卷收集 | `/to-questionnaire` |
 | 外部 issue / PR 需要评估和分流 | `/triage` |
+| 要把团队工程规范固化下来给 agent 执行 | `/project-standards` |
 | 正在定位复杂 bug | `/diagnosing-bugs` |
 | 已完成一段实现，需要双轴评审 | `/code-review` |
 
 ## 技能地图
 
-当前发行版包含 **30 个 promoted Skills**：25 个随上游同步的工程与生产力 Skill，以及本 fork 新增的 `to-goal`、`goal-crafter`、`spec-executor`、`execute-spec-in-fork`、`roundtable`。
+当前发行版包含 **31 个 promoted Skills**：25 个随上游同步的工程与生产力 Skill，以及本 fork 新增的 `to-goal`、`goal-crafter`、`spec-executor`、`execute-spec-in-fork`、`roundtable`、`project-standards`。
 
 ### 规划与交接
 
@@ -211,6 +212,7 @@ Goal
 | [`diagnosing-bugs`](./skills/engineering/diagnosing-bugs/SKILL.md) | 系统化定位复杂故障 |
 | [`domain-modeling`](./skills/engineering/domain-modeling/SKILL.md) | 维护领域语言、CONTEXT 和 ADR |
 | [`improve-codebase-architecture`](./skills/engineering/improve-codebase-architecture/SKILL.md) | 识别并推进架构深化机会 |
+| [`project-standards`](./skills/engineering/project-standards/SKILL.md) | 探索代码生成/更新/审计项目工程规范，供执行链强制对照 |
 | [`resolving-merge-conflicts`](./skills/engineering/resolving-merge-conflicts/SKILL.md) | 处理合并冲突并保护双方意图 |
 | [`teach`](./skills/productivity/teach/SKILL.md) | 多会话教学，目录作为有状态学习空间 |
 | [`wizard`](./skills/engineering/wizard/SKILL.md) | 生成交互式 bash 向导，处理只有人能完成的步骤（开通基础设施、配置凭证 / CI secret） |
@@ -240,13 +242,13 @@ Goal
 
 ### 与上游的差异
 
-- **新增 skill**：`to-goal`、`goal-crafter`、`spec-executor`、`execute-spec-in-fork`、`roundtable`（均位于 `skills/engineering/`）
+- **新增 skill**：`to-goal`、`goal-crafter`、`spec-executor`、`execute-spec-in-fork`、`roundtable`、`project-standards`（均位于 `skills/engineering/`）
 - **路由适配**：`ask-matt` 增加自动 `/execute-spec-in-fork`、手动 fork + `/spec-executor` 与 `/to-goal` 分支及「Crossing the context boundary」章节；`to-spec` 追加 `SPEC READY` launch block
 - **表达层**：`grilling`、`to-tickets`、`triage`、`setup-matt-pocock-skills` 使用固定 emoji 锚点，便于扫读与按编号回复
 - **产出可选性**：`improve-codebase-architecture` 默认以 markdown 呈现候选，HTML 报告改为按需产出（离线与受限环境下不再残废）
 - **绝对化表述加边界**：`to-spec` 的 seam 数量与 `resolving-merge-conflicts` 的 `--abort` 改为「默认…除非…」句式，保留引导力但不在边缘场景误导
 - **独立发行**：package、Claude plugin、marketplace、changeset 和仓库链接使用本 fork 的名称、版本与远端
-- **本地分发**：`npm run sync:local` 先备份并同步 30 个 promoted Skills 到统一的 `~/.agents_skills/`，再刷新 Hermes 副本
+- **本地分发**：`npm run sync:local` 先备份并同步 31 个 promoted Skills 到统一的 `~/.agents_skills/`，再刷新 Hermes 副本
 - **上游维护**：`npm run sync:upstream` 在干净工作树上创建备份分支，并把 fork overlay rebase 到最新 `upstream/main`；脚本不会自动 push，rebase 后自动跑版本与 lint 校验，失败即报 `SYNC INCOMPLETE`
 - **非 Codex harness 一等路径**：`execute-spec-in-fork` 缺硬依赖时 refuse 并给出完整 Manual fallback runbook(ZCode 下「同工作区新会话 + `/spec-executor` + `#sess_*` 回读」);`ask-matt` 路由同步更新
 - **维护设施**:fork-guard CI(lint + 版本一致性 + 插件校验)、`.githooks/pre-push`、`scripts/sync-drill.sh` 上游 rebase 成本演练(指标记入 `docs/sync-drill-log.md`,内含上游 `implement-spec` 晋升预警,预案见 `docs/upstream-collision-playbook.md`)、继承 skill 表达层改动准入(`lint-skills.mjs --diff-audit`)

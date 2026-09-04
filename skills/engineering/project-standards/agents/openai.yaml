@@ -1,0 +1,5 @@
+interface:
+  display_name: "Project Standards"
+  short_description: "Generate, update, or audit a repo's enforceable engineering standards document"
+policy:
+  allow_implicit_invocation: false

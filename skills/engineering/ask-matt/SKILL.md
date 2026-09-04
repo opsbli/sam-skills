@@ -64,6 +64,7 @@ Four skills move settled work from a planning thread into an execution thread wi
 Not feature work — upkeep.
 
 - **`/improve-codebase-architecture`** — run whenever you have a spare moment to keep the codebase good for agents to operate in. It surfaces **deepening opportunities**; picking one _generates an idea_ you can take into the main flow at `/grill-with-docs`. It's the survey that finds the candidates; **`/codebase-design`** (below) is the bench you design the chosen one on.
+- **`/project-standards`** — make the repo's engineering conventions enforceable instead of assumed. `generate` explores the code and produces a standards draft for a human to confirm; `update` amends it; `audit` checks the code against it. Run it once per repo after `/setup-matt-pocock-skills`; its output (`docs/agents/project-standards.md`) is what `/code-review`'s Standards axis and `/spec-executor`'s acceptance floor read.
 
 ## Vocabulary underneath
 

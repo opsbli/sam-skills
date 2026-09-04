@@ -20,6 +20,8 @@ Implement one approved spec in the forked execution thread. Treat the planning t
    - explicit non-goals and workspace boundaries;
    - authorization for commit, push, review request, deployment, tracker edits, data changes, and other external effects.
 
+When the repo has `docs/agents/project-standards.md`, its confirmed rules are implied acceptance criteria: DDL, migration scripts, skeleton, and verification-floor requirements from that file apply to this execution as if written into the spec. A spec that contradicts the standards file is a routing problem — surface it to the planning thread instead of silently picking one.
+
 Do not reopen settled product questions. Pause only when the final spec is internally contradictory, conflicts materially with the repository, lacks a required external contract, or requires new authority.
 
 ## Lock scope before editing

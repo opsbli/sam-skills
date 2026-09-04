@@ -35,6 +35,8 @@ Look for the originating spec, in this order:
 
 Anything in the repo that documents how code should be written, such as `CODING_STANDARDS.md` or `CONTRIBUTING.md`.
 
+`docs/agents/project-standards.md` (when present) is the repo's **authoritative** standards source: its confirmed rules are hard violations, its ⚠️-marked items are skipped entirely, and it overrides the smell baseline wherever they disagree. List it first among the sources handed to the Standards sub-agent.
+
 On top of whatever the repo documents, the Standards axis always carries the **smell baseline** below — a fixed set of Fowler code smells (_Refactoring_, ch.3) that applies even when a repo documents nothing. Two rules bind it:
 
 - **The repo overrides.** A documented repo standard always wins; where it endorses something the baseline would flag, suppress the smell.
