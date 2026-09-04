@@ -26,7 +26,7 @@ This is the first-class route everywhere that lacks Codex App task tools — inc
 2. **Open the execution thread.** In ZCode: start a new session bound to the *same workspace directory*. In other harnesses: fork the conversation or open a fresh session in the same checkout.
 3. **Launch.** Paste the complete `SPEC READY` block into the new thread, then invoke `/spec-executor`. Say explicitly that this paste is the launch command.
 4. **Return the receipt.** When the executor finishes, bring its `SPEC EXECUTION RECEIPT` back to the planning thread — paste it, or in ZCode reference the execution session with `#sess_<id>` so the planning thread can read the summary directly.
-5. **Close the loop.** Validate the receipt against the same six gates used for the automatic route (outcome completed, one parseable receipt, every criterion evidenced, no pending planning decisions, worktree and external effects reported). Ask once for `Goal / spec quality`; a skip does not block acceptance.
+5. **Close the loop.** Validate the receipt against the same six gates used for the automatic route (outcome completed, one parseable receipt, every criterion evidenced, no pending planning decisions, worktree and external effects reported). Ask once for `Goal / spec quality`; a skip does not block acceptance. Then settle the facts: a `Docs delta` other than `none` goes through `/domain-modeling` into `CONTEXT.md` or an ADR *now*, in the planning thread — a blank delta is an invalid receipt.
 
 The permission envelope is identical to the automatic route: the receipt reports what was done; it never authorizes commit, push, or any external action on its own.
 
@@ -93,6 +93,8 @@ Require all of the following before archiving:
 6. final worktree state and external effects are reported.
 
 Those six gates are the archive bar. After they pass, present the receipt and ask the planning thread or the user to fill `Goal / spec quality` (`accurate` / `criteria-too-vague` / `criteria-wrong` / `missing-constraint` / `over-scoped`, plus one sentence) by comparing the receipt with the actual diff. Fill it when they answer; leave it blank if they skip. A missing or empty quality field must not block archive.
+
+Before archiving, settle the facts. A blank `Docs delta` is an invalid receipt — send it back as a validation failure. When it lists deviations, constraints, or terms, run `/domain-modeling` in the planning thread to record what belongs in `CONTEXT.md` or an ADR, and drop what is ephemeral. Execution knowledge must land in the fact documents while the receipt is still open; after archive, the delta is unreachable.
 
 Then unpin the exact child if necessary, and archive it. Archive only after validating the result; delivery acceptance is never completion. Archiving is recoverable and must not delete history.
 

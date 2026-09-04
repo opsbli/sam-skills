@@ -24,7 +24,7 @@ The thread needs a final `SPEC READY` block or an explicitly identified approved
 
 The leading idea is the **execution lock**: before editing, the executor states the outcome, source, scope, validation seam, and external authority. It then implements against that fixed contract and reviews the final diff from the recorded baseline.
 
-The closing `SPEC EXECUTION RECEIPT` reports each acceptance criterion with evidence, changed files, validation, review findings, remaining risks, final worktree state, and every external effect. It can also carry an optional `Goal / spec quality` label. The executor may leave that field blank; the planning thread or the user fills it after comparing the receipt with the actual diff. A blank label is not a failed completion.
+The closing `SPEC EXECUTION RECEIPT` reports each acceptance criterion with evidence, changed files, validation, review findings, remaining risks, final worktree state, and every external effect. It carries a mandatory `Docs delta`: every spec deviation decided in execution, new constraint discovered, or domain term used that the glossary lacks — or an explicit `none`. A blank delta is a defect, because the planning thread uses it to settle facts back into `CONTEXT.md` and ADRs before the fork is archived. The executor never edits fact documents itself. The receipt can also carry an optional `Goal / spec quality` label. The executor may leave that field blank; the planning thread or the user fills it after comparing the receipt with the actual diff. A blank label is not a failed completion.
 
 ## Common questions
 

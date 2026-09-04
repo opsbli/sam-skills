@@ -77,10 +77,13 @@ SPEC EXECUTION RECEIPT
 - Planning-thread decision needed:
 - Final worktree state:
 - External effects: <push, deploy, tracker, data, real services, messages>
+- Docs delta: <deviations from the spec you decided on your own, new constraints discovered, new domain terms used — one line each; write "none" explicitly>
 - Goal / spec quality: <optional: accurate / criteria-too-vague / criteria-wrong / missing-constraint / over-scoped — plus one sentence>
 ```
 
 Keep the receipt concise but evidence-bearing. Include exact commands, counts, identifiers, and links when they materially prove completion. Never claim a real environment, deployment, or external action that was not verified.
 Redact credentials, tokens, cookies, personal data, and sensitive environment identifiers before the receipt leaves the execution thread.
+
+`Docs delta` is how execution pays back the project's fact documents. During implementation, note every place where you made a product-adjacent call the spec did not cover, hit a constraint the spec did not mention, or needed a domain term the glossary does not have. Report them, one per line, or write `none` explicitly — a blank field is a defect, not a zero. Do **not** edit `CONTEXT.md` or ADRs from the execution thread: the planning thread owns the fact documents, and your delta is its input, not a bypass.
 
 `Goal / spec quality` is optional and is not a completion condition. The execution agent may leave it blank. The planning thread or the user fills it after comparing the receipt with the actual diff.

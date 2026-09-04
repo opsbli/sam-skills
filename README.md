@@ -110,7 +110,7 @@ Codex App 会自动 Fork、启动 `/spec-executor`、回传 `SPEC EXECUTION RECE
 1. 规划线程停在最终 `SPEC READY`，不再讨论实现；
 2. 同一工作区**新建会话**，粘贴完整 `SPEC READY`，运行 `/spec-executor`；
 3. 把 receipt 带回规划线程：粘贴，或用 `#sess_<执行会话 id>` 让规划线程直接读取；
-4. 按同一组验收门禁校验 receipt，并可选择性记录 `Goal / spec quality`。
+4. 按同一组验收门禁校验 receipt，并可选择性记录 `Goal / spec quality`；receipt 里 `Docs delta` 非 `none` 时，用 `/domain-modeling` 当场结算进 `CONTEXT.md` 或 ADR（空白 delta 视为无效 receipt)——执行期产生的决策和术语不会随归档蒸发。
 
 完整步骤见 [`execute-spec-in-fork` 的 Manual fallback runbook](./skills/engineering/execute-spec-in-fork/SKILL.md)。
 

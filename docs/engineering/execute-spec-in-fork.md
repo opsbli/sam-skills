@@ -38,7 +38,7 @@ The post-fork Ask matters because a fork contains completed history only. The co
 
 | Event | What the workflow does |
 |---|---|
-| `completed` with a valid receipt | Presents evidence, asks once for `Goal / spec quality`, and archives the child even if that field stays blank |
+| `completed` with a valid receipt | Presents evidence, asks once for `Goal / spec quality`, settles a non-`none` `Docs delta` through `domain-modeling`, then archives the child |
 | `needs-input` | Pins the child, asks in the planning task, then resumes the same child |
 | `failed` or invalid receipt | Preserves the child and its worktree evidence |
 | Missing pushed result | Reads the exact child only when the user asks; never resends automatically |
@@ -73,6 +73,7 @@ No. The archive bar is still a completed, parseable receipt with evidenced crite
 - The planning task stays free of implementation and test logs.
 - Decisions return to the planning task and resume the same child.
 - A completed child returns acceptance evidence before it is archived, and archive still proceeds if `Goal / spec quality` is left blank.
+- A `Docs delta` other than `none` is settled into `CONTEXT.md` or an ADR via `domain-modeling` before the child is archived; a blank delta is sent back as an invalid receipt.
 - Failures remain inspectable and no state-changing request is retried automatically.
 
 ## Where it fits
