@@ -1,10 +1,6 @@
-<p align="center">
-  <img src="assets/to-goal-hero.png" alt="从模糊想法到已确认 Spec，再到隔离执行线程的工程工作流" width="100%">
-</p>
-
 <div align="center">
 
-# Matt Skills with To-Goal
+# Sam Skills
 
 **把需求留在规划线程，把实现放进执行线程：能继承就 Fork，要搬运就 Goal**
 
