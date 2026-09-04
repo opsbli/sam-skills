@@ -7,7 +7,7 @@ This repository has two remotes with different jobs:
 
 The maintained branch is an **overlay**: upstream history stays intact, and fork-specific workflow changes sit on top.
 
-> **History note (2026-09):** `origin/main` was re-published from a fresh snapshot and currently shares no history with `upstream`. Before `sync:upstream` or `sync-drill.sh` can do real work here, graft the histories once: `git remote add upstream https://github.com/mattpocock/skills.git && git fetch upstream main --tags`, then re-root the snapshot onto the upstream tip it was cut from (v1.2.3) with `git replace --graft <root-commit> <upstream-v1.2.3-commit>` and a history-rewriting pass (`git filter-repo` or a one-time rebase). Until that graft exists, drills report "already based on current upstream/main" only vacuously — treat them as no-ops.
+> **History note (2026-09):** `origin/main` was first published as a fresh snapshot, then grafted onto `upstream/main` (`6654f6b`, v1.2.3) on 2026-09-04 via `commit-tree` re-rooting. Histories are now connected: `git merge-base HEAD upstream/main` resolves, and `sync:upstream` / `sync-drill.sh` do real work. The pre-graft tip is preserved on the local branch `backup/pre-graft-20260904-105531`.
 
 ## Sync upstream
 
@@ -56,12 +56,12 @@ Pure wording polish on an inherited skill is rejected in review. Two mechanical 
 
 ## Publish to the fork
 
-After the history graft above, keep local `main` tracking `upstream/main` so `git pull` cannot accidentally merge from the publication remote. Publishing therefore requires an explicit destination:
+Keep local `main` tracking `upstream/main` so `git pull` cannot accidentally merge from the publication remote. Publishing therefore requires an explicit destination:
 
 ```bash
 git push origin main
 ```
 
-Normal pushes need no force. Only a history rewrite (the initial graft, or a later deliberate rebuild) requires `--force-with-lease`, and that is a destructive remote operation that requires explicit user authorization at action time.
+Normal pushes need no force. Only a history rewrite (like the initial graft, or a later deliberate rebuild) requires `--force-with-lease`, and that is a destructive remote operation that requires explicit user authorization at action time.
 
 Never push to `upstream`.
