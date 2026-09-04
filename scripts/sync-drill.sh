@@ -37,7 +37,21 @@ base="$(git merge-base HEAD upstream/main)"
 upstream_tip="$(git rev-parse --short upstream/main)"
 
 if [[ "$base" == "$(git rev-parse upstream/main)" ]]; then
-  echo "already based on current upstream/main ($upstream_tip); nothing to measure"
+  stamp="$(date +%Y-%m-%d %H:%M)"
+  mkdir -p docs
+  if [[ ! -f "$log_file" ]]; then
+    cat > "$log_file" <<'EOF'
+# Sync drill log
+
+One row per drill. Metrics measure the trial rebase of the fork overlay onto
+the fetched upstream tip. `est. minutes` is a 3-min-per-hunk heuristic.
+
+| timestamp | upstream tip | result | conflicted files | conflict hunks | est. minutes | implement-spec tripwire |
+|---|---|---|---|---|---|---|
+EOF
+  fi
+  printf '| %s | %s | up-to-date | 0 | 0 | 5 | no |\n' "$stamp" "$upstream_tip" >> "$log_file"
+  echo "already based on current upstream/main ($upstream_tip); baseline row logged to $log_file"
   exit 0
 fi
 
