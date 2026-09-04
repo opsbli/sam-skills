@@ -1,18 +1,18 @@
 ---
 name: to-spec
-description: "Turn the current conversation into a spec and publish it to the project issue tracker: no interview, just synthesis of what you've already discussed."
+description: Turn the current conversation into a spec and publish it to the project issue tracker — no interview, just synthesis of what you've already discussed.
 disable-model-invocation: true
 ---
 
-This skill takes the current conversation context and codebase understanding and produces a spec. Do NOT interview the user; just synthesize what you already know.
+This skill takes the current conversation context and codebase understanding and produces a spec. Do NOT interview the user — just synthesize what you already know.
 
-The issue tracker and triage label vocabulary should have been provided to you. If not, tell the user to run `/setup-matt-pocock-skills`.
+The issue tracker and triage label vocabulary should have been provided to you — run `/setup-matt-pocock-skills` if not.
 
 ## Process
 
 1. Explore the repo to understand the current state of the codebase, if you haven't already. Use the project's domain glossary vocabulary throughout the spec, and respect any ADRs in the area you're touching.
 
-2. Sketch out the seams at which you're going to test the feature. Existing seams should be preferred to new ones. Use the highest seam possible. If new seams are needed, propose them at the highest point you can. The fewer seams across the codebase, the better - the ideal number is one.
+2. Sketch out the seams at which you're going to test the feature. Existing seams should be preferred to new ones. Use the highest seam possible. If new seams are needed, propose them at the highest point you can. The fewer seams across the codebase, the better - default to one per spec unless a genuine external boundary forces another.
 
 Check with the user that these seams match their expectations.
 
@@ -54,7 +54,7 @@ A list of implementation decisions that were made. This can include:
 
 Do NOT include specific file paths or code snippets. They may end up being outdated very quickly.
 
-Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it within the relevant decision and note briefly that it came from a prototype. Trim to the decision-rich parts, not a working demo, just the important bits.
+Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it within the relevant decision and note briefly that it came from a prototype. Trim to the decision-rich parts — not a working demo, just the important bits.
 
 ## Testing Decisions
 
@@ -73,3 +73,26 @@ A description of the things that are out of scope for this spec.
 Any further notes about the feature.
 
 </spec-template>
+
+4. Choose the execution route after publishing:
+
+- If the complete spec fits one implementation context and the current conversation is coherent enough to fork, mark it for `fork → /spec-executor`.
+- If it needs several tracer-bullet slices, parallel work, cross-agent transfer, or context compression, mark it for `/to-tickets` instead. Do not pretend a large spec is fork-ready.
+- If a product decision or test seam is still unresolved, emit `SPEC NOT READY` with the missing decision. Do not launch implementation.
+
+5. End a ready result with this compact launch block so a forked thread can find the final contract without guessing between drafts:
+
+```text
+SPEC READY
+
+- Status: ready for implementation
+- Source: <published spec URL or path>
+- Repository: <implementation repository>
+- Baseline: <current commit, branch, or explicit source baseline>
+- Test seam: <highest agreed behavior seam>
+- Non-goals: <explicit exclusions>
+- External authority: <commit, push, review, deploy, tracker, data, and real-service permissions; default ungranted>
+- Next route: fork + /spec-executor | /to-tickets
+```
+
+The launch block is an index into the approved spec, not a replacement for it. Do not repeat the full spec inside the block.

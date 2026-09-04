@@ -1,22 +1,24 @@
 {
-  "name": "mattpocock",
+  "name": "tt-a1i",
   "owner": {
-    "name": "Matt Pocock",
-    "url": "https://www.aihero.dev"
+    "name": "tt-a1i",
+    "url": "https://github.com/tt-a1i"
   },
-  "description": "Matt Pocock's skills for real engineering, as an installable Claude Code plugin.",
+  "description": "Matt Pocock's engineering skills with verifiable goal handoffs and automated forked spec execution.",
   "plugins": [
     {
-      "name": "mattpocock-skills",
+      "name": "matt-skills-with-to-goal",
       "source": "./",
-      "description": "Matt Pocock's agent skills for real engineering (grilling, spec/ticket flows, TDD, code review, domain modelling and more).",
+      "description": "Engineering skills with grilling, specs, verifiable goal handoffs, automated forked execution, TDD, and code review.",
       "category": "engineering",
       "keywords": [
         "engineering",
         "skills",
         "tdd",
         "code-review",
-        "grilling"
+        "grilling",
+        "goals",
+        "spec-execution"
       ]
     }
   ]

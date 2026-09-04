@@ -1,0 +1,35 @@
+name: fork-guard
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  guard:
+    name: Lint, version identity, plugin validity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint skills
+        run: npm run lint:skills
+
+      - name: Check plugin version identity
+        run: npm run check-plugin-version
+
+      - name: Validate Claude plugin
+        run: npx --yes @anthropic-ai/claude-code plugin validate . --strict
+        continue-on-error: false

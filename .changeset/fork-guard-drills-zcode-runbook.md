@@ -1,0 +1,5 @@
+---
+"matt-skills-with-to-goal": patch
+---
+
+Make fork maintenance mechanical instead of remembered, and make the manual fork loop a first-class route. `execute-spec-in-fork` now hands over a complete manual fallback runbook when Codex App task tools or Messenger are missing (ZCode: same-workspace new session → paste `SPEC READY` → `/spec-executor` → receipt back via paste or `#sess_<id>`); `ask-matt` routes ZCode and other harnesses onto it. Add fork-guard CI (lint:skills + check-plugin-version + strict plugin validate on push/PR), a shared `.githooks/pre-push`, and a `SYNC INCOMPLETE` hard gate in `sync-upstream.sh`. Add `scripts/sync-drill.sh`, a throwaway trial rebase that logs conflict metrics to `docs/sync-drill-log.md` and trips on upstream promoting `implement-spec`; the pre-written response lives in `docs/upstream-collision-playbook.md`. Add an inherited-skill change policy (behavior fix / semantic anchor / fork-chain routing only) enforced warn-only by `lint-skills.mjs --diff-audit upstream/main` and declared in the PR template.
