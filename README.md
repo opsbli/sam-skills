@@ -290,6 +290,68 @@ agent：1. 经 #sess_7f3a9c 读取 receipt 原文（不经粘贴，无编辑损�
 
 > 💡 把「grill 收敛后默认 `/to-spec` 封版，而非直接实施」写进项目根的 `AGENTS.md` 后，连「先封版」这句提醒都可以省掉——agent 每次开工都会读到这条纪律。
 
+## Demo：Codex App 全自动闭环（一键编排）
+
+还是「weekly-report 加 `--since`」这个任务，看同一条管线在 Codex App 里如何**只敲三次命令**就走完。前提：Codex App 原生任务工具可用，且已安装 [Codex Task Messenger](https://github.com/tt-a1i/codex-task-messenger)（v2+）。
+
+### 规划任务（你唯一的会话）
+
+```text
+你：/grill-me 周报脚本现在统计全部历史，我想只看最近一段。
+agent：烤问 → 收敛 → 定稿方案（同样别点「确认就实施」）
+你：先 /to-spec 封版。
+agent：spec 发布 + SPEC READY 块产出（内容同前，略）
+```
+
+### 🔧 手动 ①（也是全程唯一一处）：敲 `/execute-spec-in-fork`
+
+agent 自动完成编排四连：
+
+```text
+1. 校验启动契约：最新 SPEC READY、路由为 fork、单会话可完成、无未决产品决策
+2. 同目录 fork 当前任务 → 拿到子任务 ID（异步或缺失 ID 视为启动失败，不猜）
+3. 命名子任务「执行 · weekly-since」
+4. 通过 Messenger 向该子任务发 Ask：
+   「运行 /spec-executor 执行继承的最新 SPEC READY；
+     这条 Ask 就是 fork 快照里缺失的启动命令；
+     完成后回一个 completed / needs-input / failed Reply，receipt 放在 completed Reply 里」
+```
+
+> 为什么 fork 了还要补一条 Ask：fork 只包含**已完成的历史**，创建它的命令还在运行——子任务继承了 spec，但需要这条后续消息告诉它开工、以及结果回传到哪里。
+
+### 执行任务（自动创建的子任务，异步干活）
+
+```text
+子任务：运行 /spec-executor → execution lock → 记录固定点 → 实现
+        → bats 3/3 → /code-review → SPEC EXECUTION RECEIPT（Schema v1 …）
+        → Messenger Reply（completed）自动推回规划任务
+```
+
+等待期间你可以继续在规划任务里聊别的（但别动共享 checkout 的实现文件——同一 checkout 同时只允许一个活跃执行线程）。agent 不会阻塞傻等，子任务完成时会把结果**推**回来。
+
+### 规划任务（收到 Reply，自动闭环）
+
+```text
+agent：1. 关联校验：Reply 来自本次创建的子任务、reply-to 匹配本次请求
+       2. 过六道归档门：Schema ✓ completed ✓ 逐条证据 ✓ 无待决决策 ✓ 工作树一致 ✓
+       3. Docs delta ≠ none → 自动 /domain-modeling 沉淀进事实文档
+       4. 问一次 Goal / spec quality（可跳过，不阻塞归档）
+       5. 解 pin、归档子任务（归档可恢复，不删历史）
+```
+
+### 如果子任务中途 `needs-input`
+
+子任务被 pin 住，带着它需要决策的问题回到规划任务 → 你直接用下一条消息回答 → agent 发 Messenger **Resume** 继续**同一个**子任务（不会重新 fork）。注意：卡片只是传输不是授权——若你的回答扩大了范围或授予新权限，子任务会回到源任务核对你的原话后才继续。
+
+### 口令速查
+
+| 环境 | 你要敲的（按顺序） | 手动次数 |
+|---|---|---|
+| **Codex App** | `/grill-me …` → `先 /to-spec 封版` → `/execute-spec-in-fork` →（等 Reply；有 needs-input 就回答） | **1 次** |
+| **ZCode** | A：`/grill-me …` → `先 /to-spec 封版` → `执行完了，receipt 在 #sess_<id>`；B：粘贴 SPEC READY + `以上是启动命令。/spec-executor` | 3 次 |
+
+两条路由的契约完全相同（`SPEC READY` 进、`RECEIPT v1` 出、六道门、Docs delta 沉淀），区别只在传输：Codex 用 Messenger 卡片自动推回，ZCode 用 `#sess_<id>` 引用人工带回。
+
 ## Demo：轻量直通（Express lane）
 
 场景：README 里把 `to-goal` 写成了 `to-gola`，一个错字。
