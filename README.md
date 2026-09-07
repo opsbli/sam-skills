@@ -210,6 +210,86 @@ SPEC EXECUTION RECEIPT
 
 六道门全过 → `Docs delta` 非 `none`，立即运行 `/domain-modeling` 把「非法参数打印用法到 stderr」写进 `docs/agents/project-standards.md` 的 CLI 惯例 → 核对工作树无漂移 → 归档执行会话。规划线程从头到尾没有出现过一行测试日志。
 
+## Demo：ZCode 全流程实录（两个会话怎么接力）
+
+还是「weekly-report 加 `--since`」这个任务，这次把镜头对准 ZCode 里的**两个会话**。全程你只有三次手动操作（标 🔧），其余都是 agent 自动完成。
+
+### 会话 A · 规划线程（你的主会话）
+
+```text
+你：/grill-me 周报脚本现在统计全部历史，我想只看最近一段。
+agent：Round 1 烤问（日期锚点怎么定？非法输入怎么办？…）→ Round 2 → 定稿方案
+agent：「以上即共享理解的全部内容。确认无误的话，我就按这个方案实施。」
+```
+
+⚠️ **分叉口（最常见的踩空点）**：这时点「确认」= 同线程直接实现，管线到此断开，`SPEC READY`、receipt、`Docs delta` 全都不会出现。要走管线，回一句：
+
+```text
+你：先 /to-spec 封版。
+agent：已把 spec 发布到 tracker（或 .scratch/weekly-since/spec.md），并产出：
+
+SPEC READY
+- Status: ready for implementation
+- Source: <spec 地址>
+- Repository: acme/team-tools
+- Baseline: main @ 3fa9c1e
+- Test seam: scripts/weekly-report.sh 的 CLI 行为测试（bats）
+- Non-goals: 不改输出格式；不做 --until
+- External authority: 仅本地实现与验证；禁止 commit/push
+- Next route: fork + /spec-executor
+```
+
+### 🔧 手动 ①：在 ZCode 新建一个会话，绑定**同一个工作区目录**
+
+关键：必须是同一个 checkout——fork 隔离的是对话上下文，不是文件。
+
+### 会话 B · 执行线程（刚建的新会话）
+
+```text
+你：（粘贴完整的 SPEC READY 块）以上是启动命令。/spec-executor
+
+agent：找到 SPEC READY → 校验路由 → 发出 execution lock：
+       Executing: weekly-report.sh 支持 --since <YYYY-MM-DD>，非法输入非零退出
+       In scope / Out of scope / Validation / External authority: ...
+agent：记录实施前 HEAD=3fa9c1e（review 固定点）→ 实现 → bats 3/3 通过
+       → /code-review 对照固定点，无 P0/P1
+agent：SPEC EXECUTION RECEIPT
+       - Schema: spec-executor-receipt/v1
+       - Conclusion: completed
+       - Acceptance criteria: 3/3 pass（附 bats 证据）
+       - Docs delta: 团队惯例——CLI 参数非法时打印用法到 stderr
+       - External effects: none
+       「请把 receipt 带回规划线程；本会话 id：sess_7f3a9c…」
+```
+
+### 🔧 手动 ②：切回会话 A，发一句话
+
+```text
+你：执行完了，receipt 在 #sess_7f3a9c。
+```
+
+### 会话 A · 规划线程（闭环自动跑完）
+
+```text
+agent：1. 经 #sess_7f3a9c 读取 receipt 原文（不经粘贴，无编辑损耗）
+       2. 过六道归档门：Schema ✓ completed ✓ 逐条证据 ✓ 无待决决策 ✓ 工作树一致 ✓
+       3. Docs delta ≠ none → 自动运行 /domain-modeling，
+          把「非法参数打印用法到 stderr」沉淀进 docs/agents/project-standards.md
+       4. 问一次 Goal / spec quality（可跳过，不阻塞验收）
+       5. 汇报验收完成——会话 B 可以关掉了
+```
+
+规划线程从头到尾没有出现一行测试日志；实现细节全部留在会话 B 里。
+
+### 口令速查
+
+| 会话 | 你要敲的（按顺序） |
+|---|---|
+| **A · 规划** | `/grill-me …` → `先 /to-spec 封版` →（等执行）→ `执行完了，receipt 在 #sess_<id>` |
+| **B · 执行** | 粘贴 SPEC READY 全文 + `以上是启动命令。/spec-executor` |
+
+> 💡 把「grill 收敛后默认 `/to-spec` 封版，而非直接实施」写进项目根的 `AGENTS.md` 后，连「先封版」这句提醒都可以省掉——agent 每次开工都会读到这条纪律。
+
 ## Demo：轻量直通（Express lane）
 
 场景：README 里把 `to-goal` 写成了 `to-gola`，一个错字。
