@@ -1,5 +1,21 @@
 # mattpocock-skills
 
+## 1.2.3-to-goal.3
+
+### Patch Changes
+
+Fork release — manual bump (changelog-github requires a PAT not available locally). Aggregated from nine pending changesets:
+
+- Add `roundtable`: pressure-test an already-formed decision via parallel opposed-perspective sub-agents (independent statements, anonymous cross-review, chaired verdict preserving dissent).
+- Add `execute-spec-in-fork`: orchestrate one approved `SPEC READY` through a same-directory Codex App fork — create and name the execution task, launch `spec-executor` via Codex Task Messenger, route decisions back, validate the returned receipt, archive a correlated clean completion. Includes a first-class manual fallback runbook for ZCode / Claude Code / other harnesses (same-workspace new session → paste `SPEC READY` → `/spec-executor` → receipt back via paste or `#sess_<id>`).
+- `spec-executor`'s receipt now carries a mandatory `Docs delta` (deviations / new constraints / new terms, or explicit `none`; blank is a defect); `execute-spec-in-fork` settles a non-`none` delta through `/domain-modeling` before archiving, on both automatic and manual routes.
+- Add `project-standards`: generate / update / audit `docs/agents/project-standards.md` from real code exploration — facts found by exploration, standards confirmed by humans. `code-review`'s Standards axis reads the document as the repo's authoritative standard; `spec-executor` treats confirmed rules as implied acceptance criteria.
+- `to-goal`'s compiler output rewritten into a readiness checklist plus a required fill-in template; the compiler stops on an incomplete readiness list instead of inventing a goal.
+- `improve-codebase-architecture` defaults to markdown candidates (HTML report on request); `to-spec` defaults to one seam per spec; `resolving-merge-conflicts` treats `--abort` as last resort.
+- Portable handoffs record their source Codex task and execution owner for targeted follow-up via Codex Task Messenger.
+- Optional `Goal / spec quality` field on the execution receipt; `execute-spec-in-fork` asks once before archive, skip does not block.
+- Fork maintenance: republished home to `opsbli/sam-skills`; fork-guard CI + `.githooks/pre-push`; `sync-upstream.sh` hard `SYNC INCOMPLETE` gate; `sync-drill.sh` trial-rebase metrics with implement-spec tripwire; inherited-skill expression-layer change policy + `lint-skills.mjs --diff-audit`; upstream-collision playbook.
+
 ## 1.2.3
 
 ### Patch Changes
