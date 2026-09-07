@@ -32,6 +32,7 @@ AI coding 任务常常从需求讨论一路聊到代码实现。线程越长，�
 | 不同任务都使用同一档模型和推理强度 | goal 按风险推荐 Lightweight / Standard / Advanced 与推理强度 |
 | “做完了”依赖人的主观判断 | receipt 首字段带 `Schema` 版本，六道归档门机械校验，逐项证据 |
 | “改个文案也要走 grill → spec → fork 全链” | 轻量直通：低于复杂度地板的任务在规划线程内直接完成，留 3 行 mini receipt 保持可追溯 |
+| Agent 每次都靠猜项目规矩（骨架放哪、迁移怎么写、验证跑到什么程度） | `/project-standards` 探索真实代码生成标准草案，人确认后固化为 `docs/agents/project-standards.md`；评审与执行的验收底线直接读它 |
 
 > **Fork 负责隔离后续上下文，Goal 负责压缩已有上下文，Express lane 负责轻任务不出规划线程。** 连续开发优先 fork；跨人、跨天、跨引擎、并行或上下文混乱时使用 `to-goal`；单文件机械改动直接走直通。
 
@@ -39,6 +40,8 @@ AI coding 任务常常从需求讨论一路聊到代码实现。线程越长，�
 
 ```mermaid
 flowchart LR
+    setup["一次性初始化<br/>/setup-matt-pocock-skills"] --> standards["固化工程规范<br/>/project-standards"]
+    standards -. "每仓库一次<br/>写码/评审前完成" .-> grill
     idea["模糊想法"] --> grill["聊清楚<br/>/grill-me"]
     grill --> spec["封版共识<br/>/to-spec"]
     spec --> route{"任务体量?"}
@@ -50,23 +53,27 @@ flowchart LR
     execute --> receipt["摘要回流<br/>EXECUTION RECEIPT v1"]
     spec -. "多分片 / 跨上下文" .-> goal["压缩契约<br/>/to-tickets + /to-goal"]
     goal --> execute
+    receipt -. "Docs delta ≠ none" .-> settle["沉淀事实<br/>/domain-modeling"]
+    receipt -. "Standards 轴对照" .-> standards
 
     classDef source fill:#171717,color:#F7F3EA,stroke:#171717,stroke-width:2px;
     classDef plan fill:#F7F3EA,color:#171717,stroke:#171717,stroke-width:2px;
     classDef contract fill:#DCF23E,color:#171717,stroke:#171717,stroke-width:3px;
     classDef action fill:#F35B2A,color:#FFFFFF,stroke:#171717,stroke-width:2px;
+    classDef init fill:#FFFFFF,color:#171717,stroke:#171717,stroke-width:2px,stroke-dasharray:5 5;
 
     class idea source;
-    class grill,spec,route plan;
+    class grill,spec,route,settle plan;
     class orchestrate,fork,goal,express,mini contract;
     class execute,receipt action;
+    class setup,standards init;
 ```
 
 普通连续开发默认从最终 `SPEC READY` 处 fork。多分片、并行、延迟执行或上下文混乱时，再用 `to-tickets` / `to-goal` 建立可独立执行的合同。**轻任务不进管线**：单文件机械改动或无歧义的明显修复、且无未决产品决策时，走轻量直通——在规划线程内完成，以 `改了什么 / 跑了什么验证 / 工作树状态` 三行 mini receipt 收尾；任一条件不满足即回到 fork 路由。回流 receipt 首字段携带 `Schema: spec-executor-receipt/v1`，两条路由（自动 / 手动）都按它机械校验，契约演进不再靠人眼辨认。
 
 ## 使用步骤
 
-### 第 0 步：安装与初始化（一次性）
+### 第 0 步：安装与初始化（每个仓库一次性）
 
 ```bash
 # 方式一：Claude Code 插件（推荐，受管只读）
@@ -77,7 +84,14 @@ claude plugin install matt-skills-with-to-goal@opsbli
 npx skills@latest add opsbli/sam-skills
 ```
 
-在目标项目里运行一次 `/setup-matt-pocock-skills`，它会配置 issue tracker（GitHub Issues 或本地 `.scratch/` markdown）、triage 标签词汇和领域文档布局。之后每个项目只需按需维护 `docs/agents/project-standards.md`。
+然后在目标项目里**按顺序跑两个一次性命令**：
+
+```text
+/setup-matt-pocock-skills   ← ① 配置 issue tracker（GitHub Issues 或本地 .scratch/）、triage 标签词汇、领域文档布局
+/project-standards          ← ② 接着跑一次：探索真实代码，生成 docs/agents/project-standards.md
+```
+
+**第 ② 步必须在让 agent 写代码或评审之前完成。** `/project-standards` 的探索子代理只报告「代码实际是怎么做的」（事实），每条规则由你逐条确认后才生效（标准）——它是 [`/code-review`](./skills/engineering/code-review/SKILL.md) Standards 轴的权威依据，也是 [`/spec-executor`](./skills/engineering/spec-executor/SKILL.md) 的隐含验收标准。没有这份文件，下游 agent 只能猜项目规则。之后框架或约定变化时跑 `update`，定期跑 `audit` 防止规范与代码静默漂移。
 
 ### 第 1 步：把想法聊成 Spec（规划线程）
 
@@ -223,18 +237,50 @@ MINI RECEIPT
 | spec 过大，无法一次执行完 | **`to-tickets` 拆分** | 每个 ticket 声明依赖边；executor 只取当前可执行 frontier |
 | 单文件机械改动 / 明显修复 | **轻量直通** | 规划线程内完成，3 行 mini receipt 收尾；不出规划线程 |
 
-## `to-goal` 增加了什么
+## `to-goal`：作用与详细用法
 
-1. **保留证据、压缩上下文。** 从 tracker spec、sub-issues、comments、blocking graph、repo instructions、branch、HEAD、diff、test seam 与 validation commands 中提炼 goal，而不是依赖当前线程记忆。
-2. **防止伪造目标。** readiness checklist 任一不满足就停止，而不是编造 goal。
-3. **显式处理部分完成。** 已验证完成的工作进入 `Current state`，剩余 gap 进入 `Completion criteria`；已证实完成的事项不会再次列为待办。
-4. **可跨 harness 迁移。** goal block 不绑定任何特定 agent；风险等级推荐 Low / Medium / High 与 Lightweight / Standard / Advanced，而不是硬编码模型名。
-5. **默认低风险边界。** 完成标准包含 code-review fixed point、smallest applicable validation、commit 授权与不污染无关 dirty files。
+**一句话作用**：把"已经规划好的任务"（批准的 spec、agent-ready ticket、tracker 当前 frontier、做了一半的 ticket）编译成一份**可验证、可粘贴、跨上下文的执行契约**——新会话拿到它直接开工，不需要重新访谈你，也不会把旧线程的噪音一起搬过去。
+
+**和 fork 的分工**：fork 继承的是整个对话，goal 携带的是压缩后的证据。当前对话干净连贯、spec 一个会话能做完 → fork（`/execute-spec-in-fork`）；跨人、跨天、跨 harness、并行执行，或当前上下文太脏、存在多版冲突草稿 → `/to-goal`。
+
+### 五种输入
+
+| 调用方式 | 它做什么 |
+|---|---|
+| `/to-goal`（无参数） | 读配置的 tracker，自动选当前未阻塞、agent-ready 的 frontier ticket |
+| `/to-goal <ticket 号或 URL>` | 完整读该 ticket（含评论；评论也是证据） |
+| `/to-goal <父 spec issue>` | 读 spec + sub-issues + 阻塞图，选当前 frontier |
+| `/to-goal <本地路径>` | 读本地 spec / ticket 文件（`.scratch/<feature>/` 约定） |
+| `/to-goal --all <父>` | 显式跨 ticket：按依赖序合成一个 goal，标注 cross-context，推荐持久 goal loop（非常规用法） |
+
+多个 frontier 并存时它列出来让你选，绝不静默合并；被阻塞的 ticket 只报告阻塞项，不生成目标。
+
+### 编译前它读什么（全程只读）
+
+完整 spec 与 ticket（含验收标准和评论）→ 仓库指令与设计词汇 → 当前 branch / HEAD / worktree / diff（记录实施前 HEAD 作为 code-review 固定点）→ 逐条对照验收标准分类（已证据完成 / 明确未完成 / 未验证——commit message 不算证据）→ 从仓库脚本、CI、现有测试发现验证命令 → 保留源上下文里的权限与工作区边界。
+
+### readiness 硬停止
+
+以下任一不满足，它停下来报缺什么，**绝不编造 goal**：source 已 agent-ready · ticket 未阻塞 · 恰好一个 frontier · 已记录 review 固定点 · 每条验收标准已分类 · 验证命令已发现 · 权限边界已保留 · 每条完成标准可独立判定（没有"看起来不错"这种标准）。
+
+### 输出三件套
+
+1. **勾选的 readiness checklist**（自证用，不进粘贴块）；
+2. **可粘贴的 goal 模板**——`Goal`（一个 ticket 级结果）/ `Current state`（分支、HEAD 固定点、要保护的脏文件、已证据完成项、已知缺口）/ `Execution order`（最短依赖路径）/ `Completion criteria`（逐条可判定 + 最小验证命令 + 对照固定点跑 code-review）/ `Constraints`（不 push、不动无关脏文件、不提前做下游 ticket 等默认边界）/ `Context`（来源 ticket、设计文档、测试缝、先看哪里）；
+3. **会话推荐**——`Lightweight / Standard / Advanced` 能力档 × `Low / Medium / High` 推理强度，按任务风险取**最低够用档**，可跨 harness 移植，不硬编码模型名。
+
+部分完成的 ticket 会被显式处理：已验证完成的工作写进 `Current state`，剩余 gap 写进 `Completion criteria`——下一个 agent 不会重做已证实的事，也看不到被隐藏的缺口。goal 的可验证性规则（一个勾选框一条可验证条件）由 [`goal-crafter`](./skills/engineering/goal-crafter/SKILL.md) 提供。
+
+### 边界
+
+只编译，不实现、不改 tracker、不建分支、不重新访谈；spec 还没有 ticket 时，仅当全部工作能装进一个全新上下文窗口才直接出 goal，否则路由到 `/to-tickets`；`--all` 仅用于明确要求的多 ticket 持久执行，不是常规 Matt 工作流。
 
 ## 如何选择入口
 
 | 当前情况 | 推荐入口 |
 |---|---|
+| 新项目首次接入本套技能，还没配置 tracker | `/setup-matt-pocock-skills`，**紧接着跑一次 `/project-standards`**（在让 agent 写码/评审之前） |
+| 想让 agent 停止猜项目规矩，把骨架/迁移/验证底线固化成文 | `/project-standards`（`generate`：无文件；`update`：规则变了；`audit`：检查代码是否还在遵守） |
 | 需求还模糊，需要先聊清楚 | `/grill-me` 或 `/grill-with-docs` |
 | 方案已明确，准备形成可执行 Spec | `/to-spec` |
 | Spec 已批准、当前对话清晰、可以立刻开发 | `/execute-spec-in-fork`（推荐）；或其他 harness 中的 manual fork + `/spec-executor` |
