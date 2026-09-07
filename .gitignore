@@ -1,3 +1,6 @@
 node_modules
 
 .idea/
+
+# ZCode workspace skills are machine-specific absolute-path symlinks
+.zcode/
