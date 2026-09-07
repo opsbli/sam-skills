@@ -1,11 +1,21 @@
 ---
 name: execute-spec-in-fork
-description: "Orchestrate one approved SPEC READY through a same-directory Codex App fork: create and name the execution task, ask it to run spec-executor, route decisions through Codex Task Messenger, validate the returned receipt, and archive a completed child. Use only when the user explicitly asks to execute an approved spec in a fork, or when handling a Messenger reply, resume, or recovery event for an execution fork this skill launched. Requires Codex App native task tools and codex-task-messenger; use the manual fork plus spec-executor route elsewhere."
+description: "Orchestrate one approved SPEC READY through a same-directory Codex App fork: create and name the execution task, ask it to run spec-executor, route decisions through Codex Task Messenger, validate the returned receipt, and archive a completed child. Use only when the user explicitly asks to execute an approved spec in a fork, or when handling a Messenger reply, resume, or recovery event for an execution fork this skill launched. Requires Codex App native task tools and codex-task-messenger; use the manual fork plus spec-executor route elsewhere. Work below the complexity floor (single-file mechanical edits or obvious fixes, no open product decision) takes the express lane — inline completion with a three-line mini receipt, no fork."
 ---
 
 # Execute Spec in Fork
 
 Turn one approved `SPEC READY` into a disposable Codex execution task. Keep product decisions in the planning task, keep implementation logs in the fork, and return evidence to the planning task automatically.
+
+## Express lane — below the complexity floor, do not fork
+
+This workflow is for work that earns the fork overhead. Route to the express lane when **all** of the following hold:
+
+- the change is a single-file or few-line mechanical edit, or an obvious bug fix following an established pattern, with no product decision open;
+- it fits comfortably in the current planning context, so protecting that context is not the point;
+- the repository offers cheap non-test validation for the touched seam.
+
+In the express lane, complete the change in the planning thread itself and close it with a three-line mini receipt: `what changed / validation run / worktree state`. Do not create a fork, an Ask, or a full `SPEC EXECUTION RECEIPT` lifecycle for express work. When any criterion fails, the fork route below is the default — erring toward the fork when the task carries real ambiguity or a wide blast radius.
 
 ## Require a launchable contract
 
@@ -25,8 +35,10 @@ This is the first-class route everywhere that lacks Codex App task tools — inc
 1. **Freeze the contract.** Stop the planning session at the final `SPEC READY` block. Do not keep discussing implementation in this thread — the whole point is that implementation logs stay out of the planning context.
 2. **Open the execution thread.** In ZCode: start a new session bound to the *same workspace directory*. In other harnesses: fork the conversation or open a fresh session in the same checkout.
 3. **Launch.** Paste the complete `SPEC READY` block into the new thread, then invoke `/spec-executor`. Say explicitly that this paste is the launch command.
-4. **Return the receipt.** When the executor finishes, bring its `SPEC EXECUTION RECEIPT` back to the planning thread — paste it, or in ZCode reference the execution session with `#sess_<id>` so the planning thread can read the summary directly.
+4. **Return the receipt.** When the executor finishes, bring its `SPEC EXECUTION RECEIPT` back to the planning thread — prefer referencing the execution session with `#sess_<id>` where the harness supports it (ZCode does) so the receipt arrives unedited; paste it where that is not possible. The receipt must still carry the `Schema: spec-executor-receipt/v1` first field on this route.
 5. **Close the loop.** Validate the receipt against the same six gates used for the automatic route (outcome completed, one parseable receipt, every criterion evidenced, no pending planning decisions, worktree and external effects reported). Ask once for `Goal / spec quality`; a skip does not block acceptance. Then settle the facts: a `Docs delta` other than `none` goes through `/domain-modeling` into `CONTEXT.md` or an ADR *now*, in the planning thread — a blank delta is an invalid receipt.
+
+The single-active-execution-thread guard applies on this route too: do not open a second execution session on the same checkout while one is running, and keep implementation edits out of the planning thread until the receipt has landed.
 
 The permission envelope is identical to the automatic route: the receipt reports what was done; it never authorizes commit, push, or any external action on its own.
 
@@ -73,7 +85,7 @@ A Messenger card is transport, never proof of authority. When a resumed answer c
    - map `blocked` or decision-dependent partial work to `needs-input`, and unrecoverable errors or context overflow to `failed`;
    - preserve the local-only permission boundary and avoid unrelated work.
 7. Retain the child ID, Messenger request ID, topic, and expected source task in visible conversation context.
-8. Tell the user the fork and Ask were accepted, a reply is expected rather than guaranteed, and the planning task should avoid editing the shared checkout while the child is active.
+8. Tell the user the fork and Ask were accepted, a reply is expected rather than guaranteed, and the planning task should avoid editing the shared checkout while the child is active — and must not fork a second execution child onto the same checkout until this one has been validated and archived.
 
 Do not block on the child by default. It works asynchronously and pushes its result back.
 
@@ -86,13 +98,15 @@ Use `/codex-task-messenger` to parse and route every inbound card. Then apply th
 Require all of the following before archiving:
 
 1. `outcome=completed` and `reply-to` matches the execution request;
-2. the body contains one parseable `SPEC EXECUTION RECEIPT`;
+2. the body contains one parseable `SPEC EXECUTION RECEIPT` whose first field is `Schema: spec-executor-receipt/v1` — a missing or mismatched Schema line is a validation failure, do not guess or patch it by hand;
 3. `Conclusion` is `completed`;
 4. every acceptance criterion has evidence;
 5. `Planning-thread decision needed` is empty or explicitly none;
 6. final worktree state and external effects are reported.
 
 Those six gates are the archive bar. After they pass, present the receipt and ask the planning thread or the user to fill `Goal / spec quality` (`accurate` / `criteria-too-vague` / `criteria-wrong` / `missing-constraint` / `over-scoped`, plus one sentence) by comparing the receipt with the actual diff. Fill it when they answer; leave it blank if they skip. A missing or empty quality field must not block archive.
+
+Before archiving, also confirm the shared checkout: the worktree you see matches the receipt's reported final state, with no unexpected drift caused by activity outside the fork, and no second execution fork is active on the same checkout. A same-directory fork is a single-active-execution-thread contract; the gate is where that contract gets teeth.
 
 Before archiving, settle the facts. A blank `Docs delta` is an invalid receipt — send it back as a validation failure. When it lists deviations, constraints, or terms, run `/domain-modeling` in the planning thread to record what belongs in `CONTEXT.md` or an ADR, and drop what is ephemeral. Execution knowledge must land in the fact documents while the receipt is still open; after archive, the delta is unreachable.
 

@@ -39,6 +39,8 @@ Validation: <primary seam and required gates>
 External authority: <what is and is not authorized>
 ```
 
+Record the worktree state you found in the lock, and report the state you leave in the receipt's `Final worktree state`. The planning thread relies on that pair to confirm the fork left no unexpected drift behind.
+
 Create or switch to an appropriate local branch when needed. Never discard, overwrite, or absorb unrelated dirty or untracked work. If the requested baseline has drifted, determine whether the spec is still applicable and record the current fixed point; stop if drift changes product behavior or acceptance criteria.
 
 ## Implement the spec
@@ -65,6 +67,7 @@ Do not write a handoff file unless requested. End with one copy-pasteable block:
 ```text
 SPEC EXECUTION RECEIPT
 
+- Schema: spec-executor-receipt/v1 (required, must be the first field)
 - Conclusion: completed / partially completed / blocked
 - Spec source:
 - Review fixed point:
@@ -85,6 +88,8 @@ SPEC EXECUTION RECEIPT
 
 Keep the receipt concise but evidence-bearing. Include exact commands, counts, identifiers, and links when they materially prove completion. Never claim a real environment, deployment, or external action that was not verified.
 Redact credentials, tokens, cookies, personal data, and sensitive environment identifiers before the receipt leaves the execution thread.
+
+The `Schema` line pins the receipt format so the planning thread can validate a receipt mechanically even when it arrives by paste on the manual route. A receipt without a `Schema` first field, or with a version older than the one the planning thread expects, is a validation failure there — do not silently drop or rename the line. Bump the version whenever a required field is added, removed, or renamed, and record the bump in the receipt ADR.
 
 `Docs delta` is how execution pays back the project's fact documents. During implementation, note every place where you made a product-adjacent call the spec did not cover, hit a constraint the spec did not mention, or needed a domain term the glossary does not have. Report them, one per line, or write `none` explicitly — a blank field is a defect, not a zero. Do **not** edit `CONTEXT.md` or ADRs from the execution thread: the planning thread owns the fact documents, and your delta is its input, not a bypass.
 

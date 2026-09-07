@@ -7,7 +7,7 @@
 让规划线程专注于把事情想清楚，让执行线程专注于把事情做完。
 
 [![Upstream](https://img.shields.io/badge/upstream-mattpocock%2Fskills%20v1.2.3-171717?style=flat-square)](https://github.com/mattpocock/skills)
-[![Fork](https://img.shields.io/badge/fork-v1.2.3--to--goal.2-F35B2A?style=flat-square)](https://github.com/opsbli/sam-skills)
+[![Fork](https://img.shields.io/badge/fork-v1.2.3--to--goal.3-F35B2A?style=flat-square)](https://github.com/opsbli/sam-skills)
 [![Install](https://img.shields.io/badge/install-npx%20skills-F35B2A?style=flat-square)](#安装)
 [![License](https://img.shields.io/badge/license-MIT-DCF23E?style=flat-square&labelColor=171717)](LICENSE)
 
@@ -31,6 +31,7 @@ AI coding 任务常常从需求讨论一路聊到代码实现。线程越长，�
 | 当前上下文太脏、无法可靠继承 | `to-goal` 把 ticket 和仓库证据压成干净的执行契约 |
 | 不同任务都使用同一档模型和推理强度 | goal 按风险推荐 Lightweight / Standard / Advanced 与推理强度 |
 | “做完了”依赖人的主观判断 | Goal 带完成标准，executor 回传逐项证据和外部操作状态 |
+| “改个文案也要走 grill → spec → fork 全链” | 轻量直通：低于复杂度地板的任务在规划线程内直接完成，留 3 行 mini receipt 保持可追溯 |
 
 > **Fork 负责隔离后续上下文，Goal 负责压缩已有上下文。** 连续开发优先 fork；跨人、跨天、跨引擎、并行或上下文混乱时使用 `to-goal`。
 
@@ -58,7 +59,7 @@ flowchart LR
     class execute,receipt action;
 ```
 
-普通连续开发默认从最终 `SPEC READY` 处 fork。多分片、并行、延迟执行或上下文混乱时，再用 `to-tickets` / `to-goal` 建立可独立执行的合同。
+普通连续开发默认从最终 `SPEC READY` 处 fork。多分片、并行、延迟执行或上下文混乱时，再用 `to-tickets` / `to-goal` 建立可独立执行的合同。**轻任务不进管线**：单文件机械改动或无歧义的明显修复、且无未决产品决策时，走轻量直通——在规划线程内完成，以 `改了什么 / 跑了什么验证 / 工作树状态` 三行 mini receipt 收尾；任一条件不满足即回到 fork 路由。回流 receipt 首字段携带 `Schema: spec-executor-receipt/v1`，两条路由（自动 / 手动）都按它机械校验，契约演进不再靠人眼辨认。
 
 ## 三分钟开始
 
@@ -114,7 +115,7 @@ Codex App 会自动 Fork、启动 `/spec-executor`、回传 `SPEC EXECUTION RECE
 
 - **`execute-spec-in-fork` + `spec-executor`**：当前线程已经把需求谈清楚，Spec 能在一个执行会话完成；自动建立同目录执行任务和回传通道，避免重复查 Spec、重写 Goal 和手工复制 receipt。
 - **`to-goal`**：需要跨人、跨天、跨引擎、并行，或者当前历史过长、存在多版冲突；用压缩后的执行合同换取干净上下文。
-- **同线程 `/implement`**：小而明确、不值得建立持久 Spec 的改动。
+- **同线程 `/implement`**：小而明确、不值得建立持久 Spec 的改动（轻量直通通道；详见 [`execute-spec-in-fork` 的 Express lane](./skills/engineering/execute-spec-in-fork/SKILL.md)，以 3 行 mini receipt 收尾）。
 
 自动 Fork 闭环拆成三层，每一层都可以单独复用：
 
@@ -221,7 +222,8 @@ Goal
 - `spec-executor` 只执行一个已封版、单会话可完成的 Spec；需求未定或体量溢出时停止并重新路由。
 - `execute-spec-in-fork` 是 Codex App 的事件驱动适配器，依赖原生任务工具与 Codex Task Messenger；不会启动 daemon、自动重试或跨 Worktree 通信。
 - `to-goal` 只读 spec、tracker 和仓库证据，不实现、不改 issue 状态、不创建分支。
-- Fork 只隔离对话，不隔离文件系统；并行实现仍需独立 worktree、分支和文件所有权。
+- Fork 只隔离对话，不隔离文件系统；并行实现仍需独立 worktree、分支和文件所有权。同一 checkout 上同时只允许一个活跃执行线程（自动 fork 或手动会话），receipt 回流时规划线程核对工作树无意外漂移后才归档。
+- `SPEC EXECUTION RECEIPT` 首字段为 `Schema: spec-executor-receipt/v1`；缺失或版本不符即视为校验失败，不人工补写。
 - goal 不会默认授权 push、PR、merge、关闭 issue 或修改 tracker。
 - 验证强度跟随任务风险；低风险改动不机械要求全量测试，高风险逻辑必须覆盖对应验证面。
 - `handoff` 不是每次切线程的必选步骤。只要上下文已进入 spec、ticket、评论和代码，新线程可以直接重建理解。
@@ -230,7 +232,7 @@ Goal
 
 本仓库基于 [mattpocock/skills](https://github.com/mattpocock/skills) **`main` v1.2.3（同步至 2026-08-10，`84fdeff`）**，并叠加自动 fork execution、to-goal 两条上下文边界流程与 roundtable 多视角决策辩论。
 
-当前 fork 发行版为 **`1.2.3-to-goal.2`**：前半段表示同步的上游版本，后缀表示本仓库自己的发行序列。Claude 插件、package metadata 和安装入口均使用独立身份 `matt-skills-with-to-goal`，不会覆盖上游的 `mattpocock-skills`。
+当前 fork 发行版为 **`1.2.3-to-goal.3`**：前半段表示同步的上游版本，后缀表示本仓库自己的发行序列。Claude 插件、package metadata 和安装入口均使用独立身份 `matt-skills-with-to-goal`，不会覆盖上游的 `mattpocock-skills`。
 
 - Matt 原版技能：© [Matt Pocock](https://github.com/mattpocock/skills)，MIT
 - 本仓库扩展与适配：MIT

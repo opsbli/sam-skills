@@ -1,5 +1,11 @@
 # mattpocock-skills
 
+## Unreleased
+
+### Patch Changes
+
+- Roundtable-driven hardening of the fork loop (verdict 2026-09-07, recorded in ADR 0004 `.agents/adr/0004-receipt-schema-and-express-lane.md`): the `SPEC EXECUTION RECEIPT` now opens with a mandatory `Schema: spec-executor-receipt/v1` first field, validated on both the automatic and manual routes (missing or mismatched = validation failure); `execute-spec-in-fork` adds an **express lane** for work below the complexity floor (single-file mechanical edits / obvious fixes, no open product decision) that completes inline with a three-line mini receipt instead of forking; and a **single-active-execution-thread guard** on the shared checkout — before archiving, the planning thread confirms the worktree matches the receipt's reported final state and no second execution fork is running. README badge and version text corrected to `1.2.3-to-goal.3`.
+
 ## 1.2.3-to-goal.3
 
 ### Patch Changes
