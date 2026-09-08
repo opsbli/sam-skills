@@ -3,10 +3,12 @@
 #   git config core.hooksPath .githooks
 set -euo pipefail
 
-echo "pre-push: running fork guard (lint:skills, check-plugin-version)" >&2
+echo "pre-push: running fork guard (lint:skills, check:router, check-plugin-version, codex payload)" >&2
 
 npm run lint:skills
+npm run check:router
 npm run check-plugin-version
+node scripts/build-codex-plugin.mjs --check
 
 if command -v claude >/dev/null 2>&1; then
   claude plugin validate . --strict

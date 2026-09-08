@@ -1,0 +1,31 @@
+{
+  "name": "sam-skills",
+  "version": "1.2.3-to-goal.3",
+  "description": "Matt Pocock's engineering skills with verifiable goal handoffs and automated forked spec execution.",
+  "author": {
+    "name": "opsbli",
+    "url": "https://github.com/opsbli"
+  },
+  "homepage": "https://github.com/opsbli/sam-skills",
+  "repository": "https://github.com/opsbli/sam-skills",
+  "license": "MIT",
+  "keywords": [
+    "engineering",
+    "skills",
+    "tdd",
+    "code-review",
+    "grilling",
+    "domain-modeling",
+    "productivity",
+    "goals",
+    "spec-execution"
+  ],
+  "skills": "./.codex-plugin/skills/",
+  "interface": {
+    "displayName": "Sam Skills",
+    "shortDescription": "Verifiable goal handoffs and automated forked spec execution.",
+    "longDescription": "Matt Pocock's engineering skill set, extended by this fork with verifiable goal handoffs (to-goal), forked spec execution with structured receipts (spec-executor, execute-spec-in-fork), opposed-perspective decision review (roundtable), and enforceable project standards (project-standards).",
+    "developerName": "opsbli",
+    "category": "Productivity"
+  }
+}

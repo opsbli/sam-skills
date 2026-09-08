@@ -1,0 +1,20 @@
+{
+  "name": "opsbli",
+  "interface": {
+    "displayName": "opsbli"
+  },
+  "plugins": [
+    {
+      "name": "sam-skills",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
