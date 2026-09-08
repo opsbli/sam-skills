@@ -33,12 +33,6 @@ jobs:
       - name: Check Codex plugin payload freshness
         run: node scripts/build-codex-plugin.mjs --check
 
-      - name: Check router coverage
-        run: npm run check:router
-
-      - name: Check Codex plugin payload freshness
-        run: node scripts/build-codex-plugin.mjs --check
-
       - name: Check plugin version identity
         run: npm run check-plugin-version
 

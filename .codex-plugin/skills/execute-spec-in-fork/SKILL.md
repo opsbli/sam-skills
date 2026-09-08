@@ -35,8 +35,8 @@ This is the first-class route everywhere that lacks Codex App task tools — inc
 1. **Freeze the contract.** Stop the planning session at the final `SPEC READY` block. Do not keep discussing implementation in this thread — the whole point is that implementation logs stay out of the planning context.
 2. **Open the execution thread.** In ZCode: start a new session bound to the *same workspace directory*. In other harnesses: fork the conversation or open a fresh session in the same checkout.
 3. **Launch.** Paste the complete `SPEC READY` block into the new thread, then invoke `/spec-executor`. Say explicitly that this paste is the launch command.
-4. **Return the receipt.** When the executor finishes, bring its `SPEC EXECUTION RECEIPT` back to the planning thread — prefer referencing the execution session with `#sess_<id>` where the harness supports it (ZCode does) so the receipt arrives unedited; paste it where that is not possible. The receipt must still carry the `Schema: spec-executor-receipt/v1` first field on this route.
-5. **Close the loop.** Validate the receipt against the same six gates used for the automatic route (outcome completed, one parseable receipt, every criterion evidenced, no pending planning decisions, worktree and external effects reported). Ask once for `Goal / spec quality`; a skip does not block acceptance. Then settle the facts: a `Docs delta` other than `none` goes through `/domain-modeling` into `CONTEXT.md` or an ADR *now*, in the planning thread — a blank delta is an invalid receipt.
+4. **Return the receipt.** When the executor finishes, bring its `SPEC EXECUTION RECEIPT` back to the planning thread — prefer referencing the execution session with `#sess_<id>` where the harness supports it (ZCode does) so the receipt arrives unedited; paste it where that is not possible. The receipt must still carry the `Schema: spec-executor-receipt/v2` first field on this route.
+5. **Close the loop.** Validate the receipt against the same six gates used for the automatic route (outcome completed, one parseable receipt, every criterion evidenced, no pending planning decisions, worktree and external effects reported). Ask once for `Goal / spec quality`; a skip does not block acceptance. Then settle the facts: a `Docs delta` other than `none` goes through `/domain-modeling` into `CONTEXT.md` or an ADR *now*, in the planning thread — a blank delta is an invalid receipt. Then harvest the telemetry exactly as on the automatic route: one row in `docs/metrics.md` (fill the `Quality` cell from the `Goal / spec quality` answer; leave it blank on a skip), and a `skill-friction` other than `none` becomes one entry in `docs/skill-friction-log.md`.
 
 The single-active-execution-thread guard applies on this route too: do not open a second execution session on the same checkout while one is running, and keep implementation edits out of the planning thread until the receipt has landed.
 
@@ -98,7 +98,7 @@ Use `/codex-task-messenger` to parse and route every inbound card. Then apply th
 Require all of the following before archiving:
 
 1. `outcome=completed` and `reply-to` matches the execution request;
-2. the body contains one parseable `SPEC EXECUTION RECEIPT` whose first field is `Schema: spec-executor-receipt/v1` — a missing or mismatched Schema line is a validation failure, do not guess or patch it by hand;
+2. the body contains one parseable `SPEC EXECUTION RECEIPT` whose first field is `Schema: spec-executor-receipt/v2` and whose `Receipt metrics` line is present with an explicit `skill-friction` value (`none` counts, blank does not) — a missing or mismatched Schema line is a validation failure, do not guess or patch it by hand;
 3. `Conclusion` is `completed`;
 4. every acceptance criterion has evidence;
 5. `Planning-thread decision needed` is empty or explicitly none;
@@ -109,6 +109,8 @@ Those six gates are the archive bar. After they pass, present the receipt and as
 Before archiving, also confirm the shared checkout: the worktree you see matches the receipt's reported final state, with no unexpected drift caused by activity outside the fork, and no second execution fork is active on the same checkout. A same-directory fork is a single-active-execution-thread contract; the gate is where that contract gets teeth.
 
 Before archiving, settle the facts. A blank `Docs delta` is an invalid receipt — send it back as a validation failure. When it lists deviations, constraints, or terms, run `/domain-modeling` in the planning thread to record what belongs in `CONTEXT.md` or an ADR, and drop what is ephemeral. Execution knowledge must land in the fact documents while the receipt is still open; after archive, the delta is unreachable.
+
+Before archiving, harvest the telemetry. Append one row to `docs/metrics.md` from the receipt's `Receipt metrics` line, filling `archive-gates` / `archive-gate-failures` from the gate run just performed — the executor cannot see its own gate outcome. Fill the row's `Quality` cell from the `Goal / spec quality` answer; a skipped answer leaves the cell blank. When `skill-friction` is anything other than `none`, append one dated entry to `docs/skill-friction-log.md` naming the skill and the friction line. Both files are append-only ledgers, no tooling required. Friction that names a skill is input for the next revision cycle — `/project-standards audit` reviews the log against the project's own standards, and `/harvest run` turns repeats into skill-revision proposals. It is not patched ad hoc here.
 
 Then unpin the exact child if necessary, and archive it. Archive only after validating the result; delivery acceptance is never completion. Archiving is recoverable and must not delete history.
 

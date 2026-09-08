@@ -18,10 +18,15 @@ A `wayfinder` unit — a child **Issue** of a `wayfinder:map` holding a *questio
 **Triage role**:
 A canonical state-machine label applied to an **Issue** during triage (e.g. `needs-triage`, `ready-for-afk`). Each role maps to a real label string in the **Issue tracker** via `docs/agents/triage-labels.md`.
 
+**Draft proposal**:
+A file under `docs/evals/draft-proposals/` produced by `harvest` from telemetry or eval evidence. Carries an exact old→new edit and an `Approved:` line. Nothing is applied until a human flips it to `yes`; the file, not chat, is the approval record.
+_Avoid_: revision issue (use for `project-standards audit` output about the project's own standards)
+
 ## Relationships
 
 - An **Issue tracker** holds many **Issues**
 - An **Issue** carries one **Triage role** at a time
+- A **Draft proposal** is written by `harvest` and applied only after human approval
 - A **Decision ticket** is an **Issue** (a child of a `wayfinder:map`)
 
 ## Flagged ambiguities

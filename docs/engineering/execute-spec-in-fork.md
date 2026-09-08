@@ -22,7 +22,7 @@ The current task needs a final `SPEC READY`, Codex App's native task tools, and 
 
 ## Harness dependency and fallback
 
-The automatic loop is a Codex App adapter. Missing the native task tools or Messenger v2+, the skill refuses to simulate the transport and hands over the **manual fallback runbook** — a first-class route for ZCode, Claude Code, Cursor, and plain terminals: freeze the planning thread at the final `SPEC READY`, open a new session on the same workspace, paste the block, run [spec-executor](https://github.com/opsbli/sam-skills/blob/main/docs/engineering/spec-executor.md), then bring the receipt back (in ZCode, reference the execution session as `#sess_<id>`) and validate it against the same six gates. The receipt's first field is `Schema: spec-executor-receipt/v1` on both routes; a missing or mismatched line is a validation failure, never hand-patched. After that receipt is pasted back, it asks once for `Goal / spec quality`; a skip does not block using the receipt. Task-API churn is paid in the capability map and, if needed, a rewrite of this adapter — not a cross-harness layer. Recorded in [ADR 0003](https://github.com/opsbli/sam-skills/blob/main/.agents/adr/0003-codex-app-fork-loop-is-an-adapter.md) and [ADR 0004](https://github.com/opsbli/sam-skills/blob/main/.agents/adr/0004-receipt-schema-and-express-lane.md).
+The automatic loop is a Codex App adapter. Missing the native task tools or Messenger v2+, the skill refuses to simulate the transport and hands over the **manual fallback runbook** — a first-class route for ZCode, Claude Code, Cursor, and plain terminals: freeze the planning thread at the final `SPEC READY`, open a new session on the same workspace, paste the block, run [spec-executor](https://github.com/opsbli/sam-skills/blob/main/docs/engineering/spec-executor.md), then bring the receipt back (in ZCode, reference the execution session as `#sess_<id>`) and validate it against the same six gates. The receipt's first field is `Schema: spec-executor-receipt/v2` on both routes, with a `Receipt metrics` line carrying an explicit `skill-friction` value; a missing or mismatched line is a validation failure, never hand-patched. After that receipt is pasted back, it asks once for `Goal / spec quality`; a skip does not block using the receipt. Task-API churn is paid in the capability map and, if needed, a rewrite of this adapter — not a cross-harness layer. Recorded in [ADR 0003](https://github.com/opsbli/sam-skills/blob/main/.agents/adr/0003-codex-app-fork-loop-is-an-adapter.md) and [ADR 0004](https://github.com/opsbli/sam-skills/blob/main/.agents/adr/0004-receipt-schema-and-express-lane.md).
 
 ## One command, two tasks
 
@@ -39,7 +39,7 @@ The post-fork Ask matters because a fork contains completed history only. The co
 
 | Event | What the workflow does |
 |---|---|
-| `completed` with a valid receipt | Presents evidence, asks once for `Goal / spec quality`, settles a non-`none` `Docs delta` through `domain-modeling`, then archives the child |
+| `completed` with a valid receipt | Presents evidence, asks once for `Goal / spec quality`, settles a non-`none` `Docs delta` through `domain-modeling`, harvests telemetry (one row in `docs/metrics.md`, its `Quality` cell filled from the `Goal / spec quality` answer; non-`none` `skill-friction` into `docs/skill-friction-log.md`), then archives the child |
 | `needs-input` | Pins the child, asks in the planning task, then resumes the same child |
 | `failed` or invalid receipt | Preserves the child and its worktree evidence |
 | Missing pushed result | Reads the exact child only when the user asks; never resends automatically |
@@ -75,6 +75,7 @@ No. The archive bar is still a completed, parseable receipt with evidenced crite
 - Decisions return to the planning task and resume the same child.
 - A completed child returns acceptance evidence before it is archived, and archive still proceeds if `Goal / spec quality` is left blank.
 - A `Docs delta` other than `none` is settled into `CONTEXT.md` or an ADR via `domain-modeling` before the child is archived; a blank delta is sent back as an invalid receipt.
+- Receipt telemetry lands in `docs/metrics.md` and a non-`none` `skill-friction` lands in `docs/skill-friction-log.md` before archive.
 - Failures remain inspectable and no state-changing request is retried automatically.
 
 ## Where it fits

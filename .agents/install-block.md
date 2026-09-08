@@ -15,6 +15,19 @@ claude plugin install matt-skills-with-to-goal@opsbli
 
 </canonical-block>
 
+## Codex — fork marketplace
+
+The fork also ships a native Codex plugin: `.codex-plugin/plugin.json` plus a generated flat copy of the promoted skills (see [ADR 0005](./adr/0005-ship-as-a-codex-plugin.md)). Add the fork repository as a marketplace, then install its plugin:
+
+<canonical-block name="codex">
+
+```bash
+codex plugin marketplace add opsbli/sam-skills
+codex plugin add sam-skills@opsbli
+```
+
+</canonical-block>
+
 ## Codex and other agents — skills.sh
 
 [skills.sh](https://skills.sh/opsbli/sam-skills) copies editable Skill files into a supported Agent Skills harness.
@@ -45,7 +58,7 @@ npx skills@latest update <name>
 
 ## Choose one installation route
 
-The Claude plugin is a managed read-only bundle. `skills.sh` installs editable copies. Installing both can load the same Skill twice, so users choose one route.
+The Claude and Codex plugins are managed read-only bundles. `skills.sh` installs editable copies. Installing more than one route into the same harness can load the same Skill twice, so users choose one route per harness.
 
 ## Maintainer installation
 

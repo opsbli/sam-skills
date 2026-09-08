@@ -53,7 +53,7 @@ Document structure:
 2. Check the code item by item: sample broadly, then deep-dive where the first violations appear. Sub-agents are fine; every finding needs file + line evidence.
 3. Report per rule: **合规 / 不合规(附证据清单) / 无法机器判定(需人工抽查)**. Quantify violation counts; do not fix anything.
 4. Route the outcome: systemic violations (rule dead in practice) → offer to open a ticket and flag the rule for human review (fix code or amend rule); scattered violations → list them as fix candidates for `/to-tickets` or `/implement`.
-5. **Review the skill friction log.** When the repo keeps `docs/skill-friction-log.md` (receipt `skill-friction` entries harvested by the fork loop), read it during audit. Friction that repeats across receipts — the same step stalling, the same rule ambiguous, the same gate bouncing — is a skill or standards defect, not user error. Turn each high-frequency point into a revision issue against the named `SKILL.md` or this standards document; never rewrite either silently from the audit.
+5. **Review the skill friction log.** When the repo keeps `docs/skill-friction-log.md` (receipt `skill-friction` entries harvested by the fork loop), read it during audit. Friction that repeats across receipts — the same step stalling, the same rule ambiguous, the same gate bouncing — is a skill or standards defect, not user error. Turn each high-frequency point into a revision issue against the named `SKILL.md` or this standards document; never rewrite either silently from the audit. Route the revision: friction against this project's own standards stays here; friction naming a skill in the skills repo itself is a confirmed defect signal for `/harvest run`, which drafts the skill-revision proposal.
 
 ## Boundaries
 

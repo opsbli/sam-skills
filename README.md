@@ -8,7 +8,7 @@
 
 [![Upstream](https://img.shields.io/badge/upstream-mattpocock%2Fskills%20v1.2.3-171717?style=flat-square)](https://github.com/mattpocock/skills)
 [![Fork](https://img.shields.io/badge/fork-v1.2.3--to--goal.3-F35B2A?style=flat-square)](https://github.com/opsbli/sam-skills)
-[![Receipt](https://img.shields.io/badge/receipt%20schema-v1-DCF23E?style=flat-square&labelColor=171717)](#demo一次完整闭环)
+[![Receipt](https://img.shields.io/badge/receipt%20schema-v2-DCF23E?style=flat-square&labelColor=171717)](#demo一次完整闭环)
 [![License](https://img.shields.io/badge/license-MIT-DCF23E?style=flat-square&labelColor=171717)](LICENSE)
 
 `grill → spec ready → execute in fork → receipt returns`
@@ -50,7 +50,7 @@ flowchart LR
     route -- "一个执行会话" --> orchestrate["一键编排<br/>/execute-spec-in-fork"]
     orchestrate --> fork["Fork<br/>继承 SPEC READY"]
     fork --> execute["实施<br/>/spec-executor"]
-    execute --> receipt["摘要回流<br/>EXECUTION RECEIPT v1"]
+    execute --> receipt["摘要回流<br/>EXECUTION RECEIPT v2"]
     spec -. "多分片 / 跨上下文" .-> goal["压缩契约<br/>/to-tickets + /to-goal"]
     goal --> execute
     receipt -. "Docs delta ≠ none" .-> settle["沉淀事实<br/>/domain-modeling"]
@@ -69,7 +69,7 @@ flowchart LR
     class setup,standards init;
 ```
 
-普通连续开发默认从最终 `SPEC READY` 处 fork。多分片、并行、延迟执行或上下文混乱时，再用 `to-tickets` / `to-goal` 建立可独立执行的合同。**轻任务不进管线**：单文件机械改动或无歧义的明显修复、且无未决产品决策时，走轻量直通——在规划线程内完成，以 `改了什么 / 跑了什么验证 / 工作树状态` 三行 mini receipt 收尾；任一条件不满足即回到 fork 路由。回流 receipt 首字段携带 `Schema: spec-executor-receipt/v1`，两条路由（自动 / 手动）都按它机械校验，契约演进不再靠人眼辨认。
+普通连续开发默认从最终 `SPEC READY` 处 fork。多分片、并行、延迟执行或上下文混乱时，再用 `to-tickets` / `to-goal` 建立可独立执行的合同。**轻任务不进管线**：单文件机械改动或无歧义的明显修复、且无未决产品决策时，走轻量直通——在规划线程内完成，以 `改了什么 / 跑了什么验证 / 工作树状态` 三行 mini receipt 收尾；任一条件不满足即回到 fork 路由。回流 receipt 首字段携带 `Schema: spec-executor-receipt/v2`，两条路由（自动 / 手动）都按它机械校验，契约演进不再靠人眼辨认。
 
 ## 使用步骤
 
@@ -80,7 +80,11 @@ flowchart LR
 claude plugin marketplace add opsbli/sam-skills
 claude plugin install matt-skills-with-to-goal@opsbli
 
-# 方式二：npx skills（多 harness 通用）
+# 方式二：Codex 插件（受管只读，同 Claude 路由）
+codex plugin marketplace add opsbli/sam-skills
+codex plugin add sam-skills@opsbli
+
+# 方式三：npx skills（多 harness 通用）
 npx skills@latest add opsbli/sam-skills
 ```
 
@@ -121,13 +125,13 @@ npx skills@latest add opsbli/sam-skills
 receipt 回到规划线程后，过**六道归档门**才允许归档：
 
 1. `outcome=completed` 且与请求关联；
-2. 单一可解析 receipt，**首字段为 `Schema: spec-executor-receipt/v1`**——缺失或不符即校验失败，不人工补写；
+2. 单一可解析 receipt，**首字段为 `Schema: spec-executor-receipt/v2`**——缺失或不符即校验失败，不人工补写；
 3. `Conclusion` 为 `completed`；
 4. 每条验收标准都有证据；
 5. 无待决的规划线程决策；
 6. 最终工作树状态与外部影响已报告。
 
-归档前再确认共享 checkout：规划线程看到的工作树与 receipt 报告的最终状态一致、无意外漂移，且没有第二个执行 fork 在跑——同一 checkout 同时只允许一个活跃执行线程。`Docs delta` 非 `none` 时立即经 `/domain-modeling` 沉淀进 `CONTEXT.md` 或 ADR；空白 delta 是无效 receipt。
+归档前再确认共享 checkout：规划线程看到的工作树与 receipt 报告的最终状态一致、无意外漂移，且没有第二个执行 fork 在跑——同一 checkout 同时只允许一个活跃执行线程。`Docs delta` 非 `none` 时立即经 `/domain-modeling` 沉淀进 `CONTEXT.md` 或 ADR；空白 delta 是无效 receipt。Receipt 的 `Receipt metrics` 行同步收割：度量追加进 `docs/metrics.md`，`skill-friction` 非 `none` 追加进 `docs/skill-friction-log.md`，由 `/project-standards audit` 定期把高频摩擦转成 SKILL.md 修订 issue。
 
 ## Demo：一次完整闭环
 
@@ -184,7 +188,7 @@ External authority: 仅本地实现与验证；commit 未授权
 ```text
 SPEC EXECUTION RECEIPT
 
-- Schema: spec-executor-receipt/v1
+- Schema: spec-executor-receipt/v2
 - Conclusion: completed
 - Spec source: acme/team-tools#42 (SPEC READY)
 - Review fixed point: 3fa9c1e
@@ -203,6 +207,7 @@ SPEC EXECUTION RECEIPT
 - Final worktree state: 仅上述两文件改动，无其他 dirty
 - External effects: none
 - Docs delta: 团队惯例——CLI 参数非法时打印用法到 stderr（spec 未写明，按仓库既有模式执行）
+- Receipt metrics: fork-or-express: fork | archive-gates: pass | archive-gate-failures: 0 | grill-rounds: 2 | criteria-evidenced: 3/3 | docs-delta: 1 | skill-friction: none
 - Goal / spec quality: （留空，由规划线程或用户对照 diff 后填写）
 ```
 
@@ -254,10 +259,11 @@ agent：找到 SPEC READY → 校验路由 → 发出 execution lock：
 agent：记录实施前 HEAD=3fa9c1e（review 固定点）→ 实现 → bats 3/3 通过
        → /code-review 对照固定点，无 P0/P1
 agent：SPEC EXECUTION RECEIPT
-       - Schema: spec-executor-receipt/v1
+       - Schema: spec-executor-receipt/v2
        - Conclusion: completed
        - Acceptance criteria: 3/3 pass（附 bats 证据）
        - Docs delta: 团队惯例——CLI 参数非法时打印用法到 stderr
+       - Receipt metrics: fork | gates pass | skill-friction: none
        - External effects: none
        「请把 receipt 带回规划线程；本会话 id：sess_7f3a9c…」
 ```
@@ -323,7 +329,7 @@ agent 自动完成编排四连：
 
 ```text
 子任务：运行 /spec-executor → execution lock → 记录固定点 → 实现
-        → bats 3/3 → /code-review → SPEC EXECUTION RECEIPT（Schema v1 …）
+        → bats 3/3 → /code-review → SPEC EXECUTION RECEIPT（Schema v2 …）
         → Messenger Reply（completed）自动推回规划任务
 ```
 
@@ -350,7 +356,7 @@ agent：1. 关联校验：Reply 来自本次创建的子任务、reply-to 匹配
 | **Codex App** | `/grill-me …` → `先 /to-spec 封版` → `/execute-spec-in-fork` →（等 Reply；有 needs-input 就回答） | **1 次** |
 | **ZCode** | A：`/grill-me …` → `先 /to-spec 封版` → `执行完了，receipt 在 #sess_<id>`；B：粘贴 SPEC READY + `以上是启动命令。/spec-executor` | 3 次 |
 
-两条路由的契约完全相同（`SPEC READY` 进、`RECEIPT v1` 出、六道门、Docs delta 沉淀），区别只在传输：Codex 用 Messenger 卡片自动推回，ZCode 用 `#sess_<id>` 引用人工带回。
+两条路由的契约完全相同（`SPEC READY` 进、`RECEIPT v2` 出、六道门、Docs delta 沉淀），区别只在传输：Codex 用 Messenger 卡片自动推回，ZCode 用 `#sess_<id>` 引用人工带回。
 
 ## Demo：轻量直通（Express lane）
 
@@ -434,14 +440,14 @@ MINI RECEIPT
 
 ## 技能地图
 
-当前发行版包含 31 个 promoted Skills：25 个随上游同步的工程与生产力 Skill，以及本 fork 新增的 [`to-goal`](./skills/engineering/to-goal/SKILL.md)、[`goal-crafter`](./skills/engineering/goal-crafter/SKILL.md)、[`spec-executor`](./skills/engineering/spec-executor/SKILL.md)、[`execute-spec-in-fork`](./skills/engineering/execute-spec-in-fork/SKILL.md)、[`roundtable`](./skills/engineering/roundtable/SKILL.md)、[`project-standards`](./skills/engineering/project-standards/SKILL.md)。
+当前发行版包含 32 个 promoted Skills：25 个随上游同步的工程与生产力 Skill，以及本 fork 新增的 [`to-goal`](./skills/engineering/to-goal/SKILL.md)、[`goal-crafter`](./skills/engineering/goal-crafter/SKILL.md)、[`spec-executor`](./skills/engineering/spec-executor/SKILL.md)、[`execute-spec-in-fork`](./skills/engineering/execute-spec-in-fork/SKILL.md)、[`roundtable`](./skills/engineering/roundtable/SKILL.md)、[`project-standards`](./skills/engineering/project-standards/SKILL.md)、[`harvest`](./skills/engineering/harvest/SKILL.md)。
 
 | 阶段 | 技能 |
 |---|---|
 | 规划 / 澄清 | [`grill-me`](./skills/productivity/grill-me/SKILL.md) · [`grilling`](./skills/productivity/grilling/SKILL.md) · [`grill-with-docs`](./skills/engineering/grill-with-docs/SKILL.md) · [`to-questionnaire`](./skills/productivity/to-questionnaire/SKILL.md) |
 | 立项 / 拆解 | [`to-spec`](./skills/engineering/to-spec/SKILL.md) · [`to-tickets`](./skills/engineering/to-tickets/SKILL.md) · [`triage`](./skills/engineering/triage/SKILL.md) · [`wayfinder`](./skills/engineering/wayfinder/SKILL.md) |
 | 执行 / 交付 | [`spec-executor`](./skills/engineering/spec-executor/SKILL.md) · [`execute-spec-in-fork`](./skills/engineering/execute-spec-in-fork/SKILL.md) · [`to-goal`](./skills/engineering/to-goal/SKILL.md) · [`implement`](./skills/engineering/implement/SKILL.md) · [`tdd`](./skills/engineering/tdd/SKILL.md) · [`code-review`](./skills/engineering/code-review/SKILL.md) |
-| 知识与决策 | [`domain-modeling`](./skills/engineering/domain-modeling/SKILL.md) · [`project-standards`](./skills/engineering/project-standards/SKILL.md) · [`roundtable`](./skills/engineering/roundtable/SKILL.md) · [`codebase-design`](./skills/engineering/codebase-design/SKILL.md) · [`improve-codebase-architecture`](./skills/engineering/improve-codebase-architecture/SKILL.md) |
+| 知识与决策 | [`domain-modeling`](./skills/engineering/domain-modeling/SKILL.md) · [`project-standards`](./skills/engineering/project-standards/SKILL.md) · [`roundtable`](./skills/engineering/roundtable/SKILL.md) · [`codebase-design`](./skills/engineering/codebase-design/SKILL.md) · [`improve-codebase-architecture`](./skills/engineering/improve-codebase-architecture/SKILL.md) · [`harvest`](./skills/engineering/harvest/SKILL.md) |
 | 排障 / 运维 | [`diagnosing-bugs`](./skills/engineering/diagnosing-bugs/SKILL.md) · [`resolving-merge-conflicts`](./skills/engineering/resolving-merge-conflicts/SKILL.md) · [`wizard`](./skills/engineering/wizard/SKILL.md) · [`prototype`](./skills/engineering/prototype/SKILL.md) · [`research`](./skills/engineering/research/SKILL.md) |
 | 写作 / 协作 | [`writing-for-agents`](./skills/productivity/writing-for-agents/SKILL.md) · [`handoff`](./skills/productivity/handoff/SKILL.md) · [`teach`](./skills/productivity/teach/SKILL.md) · [`wait-what`](./skills/productivity/wait-what/SKILL.md) |
 | 入口 | [`ask-matt`](./skills/engineering/ask-matt/SKILL.md) · [`setup-matt-pocock-skills`](./skills/engineering/setup-matt-pocock-skills/SKILL.md) |
@@ -452,7 +458,7 @@ MINI RECEIPT
 
 - `to-goal` 是编译器，不是采访者；不会重新访谈用户、不会修改 tracker、不会创建分支。
 - Fork 只隔离对话，不隔离文件系统；并行实现仍需独立 worktree、分支和文件所有权。同一 checkout 上同时只允许一个活跃执行线程（自动 fork 或手动会话），receipt 回流时规划线程核对工作树无意外漂移后才归档。
-- `SPEC EXECUTION RECEIPT` 首字段为 `Schema: spec-executor-receipt/v1`；缺失或版本不符即视为校验失败，不人工补写。
+- `SPEC EXECUTION RECEIPT` 首字段为 `Schema: spec-executor-receipt/v2`；缺失或版本不符即视为校验失败，不人工补写。v2 必带 `Receipt metrics` 行（路由、归档门结果、grill 轮数、证据计数、`skill-friction`），规划线程在归档前收割进 `docs/metrics.md` 与 `docs/skill-friction-log.md`。
 - goal 不会默认授权 push、PR、merge、关闭 issue 或修改 tracker。
 - `spec-executor` 把规划线程当作唯一产品事实来源，不重新打开已确认决策；`Docs delta` 是它的回报义务——执行中发现的新约束、新术语和自决偏差必须显式回流，空白即缺陷。
 - `execute-spec-in-fork` 只在 Codex App 提供任务工具和 Messenger v2+ 时创建真实 fork；否则明确说出缺失能力并交出手动 runbook，绝不假装传输存在。
@@ -464,6 +470,7 @@ MINI RECEIPT
 - 同步基线：上游 `main` 的 `6654f6b`（2026-08-24），发行序列见 [CHANGELOG.md](./CHANGELOG.md)。
 - 新增执行闭环：[`spec-executor`](./skills/engineering/spec-executor/SKILL.md) + [`execute-spec-in-fork`](./skills/engineering/execute-spec-in-fork/SKILL.md)，把 `SPEC READY → fork → receipt → 条件归档` 变成一等流程；receipt 强制 `Docs delta` 回流事实文档，首字段带 `Schema` 版本供机械校验；轻任务有 Express lane（[ADR 0003](./.agents/adr/0003-codex-app-fork-loop-is-an-adapter.md)、[ADR 0004](./.agents/adr/0004-receipt-schema-and-express-lane.md)）。
 - 新增决策与标准工具：[`roundtable`](./skills/engineering/roundtable/SKILL.md)（对立视角子代理辩论已成形决策）、[`project-standards`](./skills/engineering/project-standards/SKILL.md)（从真实代码探索生成可执行工程标准）。
+- 新增知识回收与评测：[`harvest`](./skills/engineering/harvest/SKILL.md)（回执遥测与评测失败 → 技能修订提案，人工批准后落盘）+ [`docs/evals/`](./docs/evals/README.md)（核心管线 8 个黄金任务与记分板，收敛从理念变成证据）。
 - 新增跨线程执行合同：[`to-goal`](./skills/engineering/to-goal/SKILL.md) + [`goal-crafter`](./skills/engineering/goal-crafter/SKILL.md)，把 tracker 上的当前 frontier 编译为可验证、可携带、可恢复的执行目标。
 - 继承技能遵循 expression-layer 变更政策，由 `lint-skills.mjs --diff-audit` 把关；发布元数据以 `package.json` 为准，插件校验由 `check-plugin-version` 保证。
 - Fork 维护基建：[`docs/maintaining-fork.md`](./docs/maintaining-fork.md)、[`docs/upstream-collision-playbook.md`](./docs/upstream-collision-playbook.md)、fork-guard CI 与 `.githooks/pre-push`。

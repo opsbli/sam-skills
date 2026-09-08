@@ -1,6 +1,6 @@
 ## What it does
 
-`project-standards` turns a repo's unspoken engineering conventions into one enforceable document, `docs/agents/project-standards.md`. It runs in three modes: **generate** (explore → draft → human confirms → write), **update** (targeted delta on an existing document), **audit** (check the code against the document and report compliance).
+`project-standards` turns a repo's unspoken engineering conventions into one enforceable document, `docs/agents/project-standards.md`. It runs in three modes: **generate** (explore → draft → human confirms → write), **update** (targeted delta on an existing document), **audit** (check the code against the document and report compliance — and, where the repo keeps `docs/skill-friction-log.md`, turn friction that repeats across execution receipts into revision issues — standards issues here, skill-repo friction routed to `harvest`).
 
 ## When to reach for it
 

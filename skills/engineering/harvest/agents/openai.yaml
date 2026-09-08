@@ -1,0 +1,6 @@
+interface:
+  display_name: "Harvest"
+  short_description: "Turn receipt telemetry and friction logs into skill-revision proposals"
+  default_prompt: "Use $harvest to turn docs/metrics.md and the friction log into approved-ready skill revision proposals."
+policy:
+  allow_implicit_invocation: false
