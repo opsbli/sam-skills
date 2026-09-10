@@ -24,13 +24,21 @@
 
 ## 安装（每个 workspace 一次）
 
-前提：headless CLI 可发起模型调用。**授权边界（ADR 0005，实测验证）**：`zcode login` 走的是 **Z.AI 计划**（`api.z.ai`），登录写入的 key 只能花 Z.AI 计划的额度；桌面端用的是 **BigModel 编码计划**（`open.bigmodel.cn`），其鉴权由桌面本地的路由代理注入，裸 CLI 没有这条通道。因此 headless spawn 要求以下三者之一：
+前提：headless CLI 能发起模型调用。**与 Z.AI / BigModel 计划无关**——执行会话跑在你已配置的任意 provider 上（第三方 OpenAI-compatible 端点也可以）。一次性把 `~/.zcode/cli/config.json` 指向它即可：
 
-- Z.AI 计划有余额/资源包（`zcode login` 写好的 key 直接可用）；
-- 在 `~/.zcode/cli/config.json` 的 `provider.zai.options.apiKey` 显式填一个付费端点的 API key；
-- 设置 `FORK_LOOP_ZCODE_CMD` 指向一个注入计划凭证的自包装命令。
+```json
+{
+  "provider": {
+    "<我的供应商>": {
+      "kind": "openai-compatible",
+      "options": { "baseURL": "https://…/v1", "apiKey": "<key>" }
+    }
+  },
+  "model": { "main": "<我的供应商>/<模型 id>" }
+}
+```
 
-未满足时，spawn 会以 provider `1113`（余额不足）失败——这是计费/拓扑边界，不是传输缺陷；MCP 与钩子链路本身独立于此验证（见下方测试）。
+两个坑（0.16.5 实测）：`model.main` 必须是**字符串** `provider/model-id`——对象形式能过 schema 但 `kind`/`baseURL` 字段会被 ref 解析器忽略；provider 条目里必须带 `options.baseURL` 和 `options.apiKey`（anthropic 兼容端点用 `kind: "anthropic"`）。配置好后 `zcode -p "…"` 即可直接使用，无需任何 ZCode 计划的登录。
 
 1. **MCP 服务** — 写入 `<repo>/.zcode/config.json`（workspace 级，自动连接）：
 
