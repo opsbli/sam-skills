@@ -13,10 +13,11 @@
     "fork-loop": {
       "type": "stdio",
       "command": "node",
-      "args": ["${ZCODE_PLUGIN_ROOT}/scripts/fork-loop-mcp/server.mjs"]
+      "args": [
+        "${ZCODE_PLUGIN_ROOT}/scripts/fork-loop-mcp/server.mjs"
+      ]
     }
   },
-  "hooks": "./hooks",
   "keywords": [
     "engineering",
     "skills",
