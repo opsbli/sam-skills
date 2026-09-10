@@ -1,11 +1,19 @@
 ---
 name: execute-spec-in-fork
-description: "Orchestrate one approved SPEC READY through a same-directory Codex App fork: create and name the execution task, ask it to run spec-executor, route decisions through Codex Task Messenger, validate the returned receipt, and archive a completed child. Use only when the user explicitly asks to execute an approved spec in a fork, or when handling a Messenger reply, resume, or recovery event for an execution fork this skill launched. Requires Codex App native task tools and codex-task-messenger; use the manual fork plus spec-executor route elsewhere. Work below the complexity floor (single-file mechanical edits or obvious fixes, no open product decision) takes the express lane — inline completion with a three-line mini receipt, no fork."
+description: "Orchestrate one approved SPEC READY through an automatic execution thread and return evidence to the planning thread. Three transports, detected in order: Codex App native task tools + codex-task-messenger (fork_thread/Messenger), the fork-loop MCP server (ZCode and any harness with it connected — spawn_execution/mailbox), or the manual fork plus spec-executor runbook. Use only when the user explicitly asks to execute an approved spec, or when handling a reply, resume, or recovery event for an execution this skill launched. Work below the complexity floor (single-file mechanical edits or obvious fixes, no open product decision) takes the express lane — inline completion with a three-line mini receipt, no fork."
 ---
 
 # Execute Spec in Fork
 
-Turn one approved `SPEC READY` into a disposable Codex execution task. Keep product decisions in the planning task, keep implementation logs in the fork, and return evidence to the planning task automatically.
+Turn one approved `SPEC READY` into a disposable execution task. Keep product decisions in the planning task, keep implementation logs in the execution thread, and return evidence to the planning task automatically.
+
+## Pick the transport (detect in this order)
+
+1. **Codex App**: native task tools (`fork_thread`, `read_thread`, `set_thread_archived`) and `/codex-task-messenger` v2+ are both present → the Messenger route below.
+2. **fork-loop MCP**: a connected MCP server exposes `spawn_execution` / `check_mailbox` / `ack_receipt` (check via the harness MCP list or a `check_mailbox` probe) and the workspace Stop hook is registered → the ZCode automatic route below.
+3. **Neither** → the manual fallback runbook below. Never simulate a transport.
+
+All three share one contract: `SPEC READY` in, one `SPEC EXECUTION RECEIPT` out, the same six archive gates, the same Docs delta settlement and telemetry harvest.
 
 ## Express lane — below the complexity floor, do not fork
 
@@ -23,38 +31,22 @@ Before creating anything:
 
 1. Find the latest completed `SPEC READY` block and apply later user corrections.
 2. Require it to route to forked execution, fit one reliable implementation session, and contain no unresolved product decisions. Use `/to-tickets` or `/to-goal` when it does not.
-3. Require the current harness to expose native Codex App task tools for forking, messaging, reading, naming, pinning, and archiving.
-4. Require `/codex-task-messenger` to be installed with its Ask, Reply, and Resume card protocol (v2 or later) available.
 
-If a prerequisite is missing, do not create a plain new task or simulate the transport. Name the missing capability, then hand the user the manual fallback runbook below — never a dead end. After the receipt is pasted, ask once for `Goal / spec quality`; a skipped answer does not block using the receipt.
-
-## Manual fallback runbook (ZCode and other harnesses)
-
-This is the first-class route everywhere that lacks Codex App task tools — including ZCode, Claude Code, Cursor, and plain terminals. It uses the same contract (`SPEC READY` in, `SPEC EXECUTION RECEIPT` out); only the transport changes from Messenger cards to copy-paste.
-
-1. **Freeze the contract.** Stop the planning session at the final `SPEC READY` block. Do not keep discussing implementation in this thread — the whole point is that implementation logs stay out of the planning context.
-2. **Open the execution thread.** In ZCode: start a new session bound to the *same workspace directory*. In other harnesses: fork the conversation or open a fresh session in the same checkout.
-3. **Launch.** Paste the complete `SPEC READY` block into the new thread, then invoke `/spec-executor`. Say explicitly that this paste is the launch command.
-4. **Return the receipt.** When the executor finishes, bring its `SPEC EXECUTION RECEIPT` back to the planning thread — prefer referencing the execution session with `#sess_<id>` where the harness supports it (ZCode does) so the receipt arrives unedited; paste it where that is not possible. The receipt must still carry the `Schema: spec-executor-receipt/v2` first field on this route.
-5. **Close the loop.** Validate the receipt against the same six gates used for the automatic route (outcome completed, one parseable receipt, every criterion evidenced, no pending planning decisions, worktree and external effects reported). Ask once for `Goal / spec quality`; a skip does not block acceptance. Then settle the facts: a `Docs delta` other than `none` goes through `/domain-modeling` into `CONTEXT.md` or an ADR *now*, in the planning thread — a blank delta is an invalid receipt. Then harvest the telemetry exactly as on the automatic route: one row in `docs/metrics.md` (fill the `Quality` cell from the `Goal / spec quality` answer; leave it blank on a skip), and a `skill-friction` other than `none` becomes one entry in `docs/skill-friction-log.md`.
-
-The single-active-execution-thread guard applies on this route too: do not open a second execution session on the same checkout while one is running, and keep implementation edits out of the planning thread until the receipt has landed.
-
-The permission envelope is identical to the automatic route: the receipt reports what was done; it never authorizes commit, push, or any external action on its own.
+If no transport matches, do not create a plain new task or simulate one. Name the missing capability, then hand the user the manual fallback runbook below — never a dead end. After the receipt is pasted, ask once for `Goal / spec quality`; a skipped answer does not block using the receipt.
 
 ## ZCode automatic route (fork-loop-mcp)
 
-When the `fork-loop` MCP server is connected and the workspace's Stop hook is configured (setup: `scripts/fork-loop-mcp/README.md`; decision: [ADR 0005](../../../.agents/adr/0005-zcode-fork-loop-mcp-mailbox.md)), ZCode gets the Codex-shaped loop with one manual step. Detection: `check_mailbox` against the workspace responds, and a `Stop` hook is registered in `.zcode/config.json`.
+When the `fork-loop` MCP server is connected and the workspace's Stop hook is configured (setup: `scripts/fork-loop-mcp/README.md`; decision: [ADR 0005](../../../.agents/adr/0005-zcode-fork-loop-mcp-mailbox.md)), this is the transport — one manual step, and the planning session stays usable throughout.
 
 1. **Spawn.** Call `spawn_execution` with the complete `SPEC READY` block as `spec_ready`, the workspace path as `checkout`, the current session id as `planner_session`, and a short non-sensitive `topic`. The service machine-locks the checkout (the single-active-execution-thread guard becomes mechanical — a second spawn fails naming the holder), launches the headless runner, and stores the returned `SPEC EXECUTION RECEIPT` in the mailbox. The runner exit code and receipt presence come back in the tool result.
 2. **Keep using the planning session.** Do not block or idle. The receipt is delivered by the Stop hook between turns: it injects the receipt as `additionalContext` and requests continuation. Treat the injected `[fork-loop]` block as the receipt arrival — jump straight to the six gates and the telemetry harvest below.
 3. **Settle.** After the six gates pass and a non-`none` `Docs delta` is settled through `/domain-modeling`, call `ack_receipt` with the injected `task_id` — that releases the checkout lock. Call `fail_receipt` instead when validation fails. If a runner is confirmed dead with no receipt arriving, `release_execution` is the recovery path; never spawn a second execution while the lock stands.
 
-The headless runner receives the `SPEC READY` contract, not the grill history — the same contract-level inheritance as the manual runbook. If the MCP server or the Stop hook is missing, fall back to the manual runbook above; do not simulate either half of the transport.
+The headless runner receives the `SPEC READY` contract, not the grill history — the same contract-level inheritance as the manual runbook. If the MCP server or the Stop hook is missing, fall back to the manual runbook below; do not simulate either half of the transport.
 
-## Harness capability map
+## Codex App route (Messenger)
 
-This workflow is a Codex App adapter, so it depends on that harness's task tools by name. The names live here and nowhere else; everything below this section is written in capabilities. When a tool is renamed or reshaped, change this table only. The decision and its consequences live in [ADR 0003](../../../.agents/adr/0003-codex-app-fork-loop-is-an-adapter.md).
+This transport depends on Codex App's task tools by name. The names live here and nowhere else; when a tool is renamed or reshaped, change the capability table only. The decision and its consequences live in [ADR 0003](../../../.agents/adr/0003-codex-app-fork-loop-is-an-adapter.md).
 
 | Capability | Codex App tool (harness-specific) |
 |---|---|
@@ -65,6 +57,20 @@ This workflow is a Codex App adapter, so it depends on that harness's task tools
 | Identify the source task behind an inbound card | the App-supplied `source_thread_id` |
 
 Titling and pinning use the App's native task controls and are referred to by what they do.
+
+## Manual fallback runbook (no transport connected)
+
+For harnesses with neither transport — Claude Code, Cursor, plain terminals, or ZCode without fork-loop configured. It uses the same contract (`SPEC READY` in, `SPEC EXECUTION RECEIPT` out); only the transport changes to copy-paste.
+
+1. **Freeze the contract.** Stop the planning session at the final `SPEC READY` block. Do not keep discussing implementation in this thread — the whole point is that implementation logs stay out of the planning context.
+2. **Open the execution thread.** In ZCode: start a new session bound to the *same workspace directory*. In other harnesses: fork the conversation or open a fresh session in the same checkout.
+3. **Launch.** Paste the complete `SPEC READY` block into the new thread, then invoke `/spec-executor`. Say explicitly that this paste is the launch command.
+4. **Return the receipt.** When the executor finishes, bring its `SPEC EXECUTION RECEIPT` back to the planning thread — prefer referencing the execution session with `#sess_<id>` where the harness supports it (ZCode does) so the receipt arrives unedited; paste it where that is not possible. The receipt must still carry the `Schema: spec-executor-receipt/v2` first field on this route.
+5. **Close the loop.** Validate the receipt against the same six gates used for the automatic route (outcome completed, one parseable receipt, every criterion evidenced, no pending planning decisions, worktree and external effects reported). Ask once for `Goal / spec quality`; a skip does not block acceptance. Then settle the facts: a `Docs delta` other than `none` goes through `/domain-modeling` into `CONTEXT.md` or an ADR *now*, in the planning thread — a blank delta is an invalid receipt. Then harvest the telemetry exactly as on the automatic route: one row in `docs/metrics.md` (fill the `Quality` cell from the `Goal / spec quality` answer; leave it blank on a skip), and a `skill-friction` other than `none` becomes one entry in `docs/skill-friction-log.md`.
+
+The single-active-execution-thread guard applies on this route too: do not open a second execution session on the same checkout while one is running, and keep implementation edits out of the planning thread until the receipt has landed.
+
+The permission envelope is identical to the automatic route: the receipt reports what was done; it never authorizes commit, push, or any external action on its own.
 
 ## Preserve the permission envelope
 

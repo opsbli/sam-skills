@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "process",
+            "command": "node",
+            "args": ["${ZCODE_PLUGIN_ROOT}/scripts/fork-loop-mcp/stop-hook.cjs"],
+            "timeoutMs": 15000,
+            "statusMessage": "Checking fork-loop mailbox"
+          }
+        ]
+      }
+    ]
+  }
+}

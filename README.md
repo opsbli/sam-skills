@@ -88,6 +88,8 @@ codex plugin add sam-skills@opsbli
 npx skills@latest add opsbli/sam-skills
 ```
 
+安装即含 **fork-loop 自动闭环**（ZCode 用）：插件 manifest 自带 `fork-loop` MCP 服务与 `Stop` 回流钩子，指向插件内的 `scripts/fork-loop-mcp/`，无需任何独立部署或 zai 账号。唯一的额外一次性动作：headless 执行会话要有可用的模型 provider——在 `~/.zcode/cli/config.json` 里配好你自己的供应商（`provider.<id>.options.{baseURL, apiKey}` + `model.main: "<provider>/<模型 id>"` 字符串），执行会话就花它的额度（详见 [fork-loop-mcp README](./scripts/fork-loop-mcp/README.md) 与 [ADR 0005](./.agents/adr/0005-zcode-fork-loop-mcp-mailbox.md)）。
+
 然后在目标项目里**按顺序跑两个一次性命令**：
 
 ```text
@@ -109,12 +111,15 @@ npx skills@latest add opsbli/sam-skills
 ### 第 2 步：选择执行路由
 
 ```text
-/execute-spec-in-fork   ← 默认。一个执行会话能装下的 approved spec
+/execute-spec-in-fork   ← 默认。skill 自动选传输（按序检测）：
+                           ① Codex App 任务工具 → Messenger 自动闭环
+                           ② fork-loop MCP 已连接 → spawn 自动闭环（ZCode 同款体验）
+                           ③ 都没有 → 手动 runbook
 /to-tickets → /to-goal  ← 多分片、跨天、跨人、并行或上下文混乱
 轻量直通                 ← 单文件机械改动 / 明显修复，无未决产品决策
 ```
 
-`execute-spec-in-fork` 在 Codex App 里全自动（fork → Messenger Ask → 等回执 → 校验 → 归档）；在 ZCode、Claude Code 等没有 Codex 任务工具的环境里，它给出**一等手动 runbook**：同目录新会话 → 粘贴 `SPEC READY` → `/spec-executor` → receipt 用 `#sess_<id>` 引用回流（粘贴亦可）。
+Codex App 里全自动（fork → Messenger Ask → 等回执 → 校验 → 归档）。**ZCode 想要同款自动闭环，需一次性装上 fork-loop MCP + Stop 钩子**——sam-skills 插件已自带（见第 0 步安装），装好后 `/execute-spec-in-fork` 自动走 spawn 路由：agent 调 `spawn_execution`，执行会话后台跑、规划线程照常可用，receipt 由 Stop 钩子自动送回。什么都没装时走手动 runbook：同目录新会话 → 粘贴 `SPEC READY` → `/spec-executor` → receipt 用 `#sess_<id>` 引用回流。
 
 ### 第 3 步：执行（执行线程）
 
@@ -218,6 +223,8 @@ SPEC EXECUTION RECEIPT
 ## Demo：ZCode 全流程实录（两个会话怎么接力）
 
 还是「weekly-report 加 `--since`」这个任务，这次把镜头对准 ZCode 里的**两个会话**。全程你只有三次手动操作（标 🔧），其余都是 agent 自动完成。
+
+> 这是**未装 fork-loop MCP 时**的手动路由。装好后（插件自带）ZCode 升级为一次手动的自动闭环，见下面 Codex demo 的口令速查表。
 
 ### 会话 A · 规划线程（你的主会话）
 
@@ -354,9 +361,10 @@ agent：1. 关联校验：Reply 来自本次创建的子任务、reply-to 匹配
 | 环境 | 你要敲的（按顺序） | 手动次数 |
 |---|---|---|
 | **Codex App** | `/grill-me …` → `先 /to-spec 封版` → `/execute-spec-in-fork` →（等 Reply；有 needs-input 就回答） | **1 次** |
-| **ZCode** | A：`/grill-me …` → `先 /to-spec 封版` → `执行完了，receipt 在 #sess_<id>`；B：粘贴 SPEC READY + `以上是启动命令。/spec-executor` | 3 次 |
+| **ZCode（装了 fork-loop）** | `/grill-me …` → `先 /to-spec 封版` → `/execute-spec-in-fork`（agent 调 `spawn_execution`，receipt 由 Stop 钩子自动送回） | **1 次** |
+| **ZCode / 其他（未装）** | A：`/grill-me …` → `先 /to-spec 封版` → `执行完了，receipt 在 #sess_<id>`；B：粘贴 SPEC READY + `以上是启动命令。/spec-executor` | 3 次 |
 
-两条路由的契约完全相同（`SPEC READY` 进、`RECEIPT v2` 出、六道门、Docs delta 沉淀），区别只在传输：Codex 用 Messenger 卡片自动推回，ZCode 用 `#sess_<id>` 引用人工带回。
+三条路由的契约完全相同（`SPEC READY` 进、`RECEIPT v2` 出、六道门、Docs delta 沉淀），区别只在传输：Codex 用 Messenger 卡片推回，ZCode 装了 fork-loop 用 MCP 信箱 + Stop 钩子推送，未装则用 `#sess_<id>` 引用人工带回。
 
 ## Demo：轻量直通（Express lane）
 
