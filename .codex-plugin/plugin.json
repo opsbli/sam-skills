@@ -27,5 +27,14 @@
     "longDescription": "Matt Pocock's engineering skill set, extended by this fork with verifiable goal handoffs (to-goal), forked spec execution with structured receipts (spec-executor, execute-spec-in-fork), opposed-perspective decision review (roundtable), and enforceable project standards (project-standards).",
     "developerName": "opsbli",
     "category": "Productivity"
+  },
+  "mcpServers": {
+    "fork-loop": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${CODEX_PLUGIN_ROOT}/scripts/fork-loop-mcp/server.mjs"
+      ]
+    }
   }
 }

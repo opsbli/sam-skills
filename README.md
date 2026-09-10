@@ -79,7 +79,7 @@ flowchart LR
 ```bash
 # 方式一：Claude Code 插件（推荐，受管只读）
 claude plugin marketplace add opsbli/sam-skills
-claude plugin install matt-skills-with-to-goal@opsbli
+claude plugin install sam-skills@opsbli
 
 # 方式二：Codex 插件（受管只读，同 Claude 路由）
 codex plugin marketplace add opsbli/sam-skills

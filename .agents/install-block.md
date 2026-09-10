@@ -10,7 +10,7 @@ This fork is not the `mattpocock-skills` package in Claude Code's official marke
 
 ```bash
 claude plugin marketplace add opsbli/sam-skills
-claude plugin install matt-skills-with-to-goal@opsbli
+claude plugin install sam-skills@opsbli
 ```
 
 </canonical-block>
