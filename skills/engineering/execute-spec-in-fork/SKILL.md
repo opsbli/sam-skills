@@ -42,6 +42,16 @@ The single-active-execution-thread guard applies on this route too: do not open 
 
 The permission envelope is identical to the automatic route: the receipt reports what was done; it never authorizes commit, push, or any external action on its own.
 
+## ZCode automatic route (fork-loop-mcp)
+
+When the `fork-loop` MCP server is connected and the workspace's Stop hook is configured (setup: `scripts/fork-loop-mcp/README.md`; decision: [ADR 0005](../../../.agents/adr/0005-zcode-fork-loop-mcp-mailbox.md)), ZCode gets the Codex-shaped loop with one manual step. Detection: `check_mailbox` against the workspace responds, and a `Stop` hook is registered in `.zcode/config.json`.
+
+1. **Spawn.** Call `spawn_execution` with the complete `SPEC READY` block as `spec_ready`, the workspace path as `checkout`, the current session id as `planner_session`, and a short non-sensitive `topic`. The service machine-locks the checkout (the single-active-execution-thread guard becomes mechanical — a second spawn fails naming the holder), launches the headless runner, and stores the returned `SPEC EXECUTION RECEIPT` in the mailbox. The runner exit code and receipt presence come back in the tool result.
+2. **Keep using the planning session.** Do not block or idle. The receipt is delivered by the Stop hook between turns: it injects the receipt as `additionalContext` and requests continuation. Treat the injected `[fork-loop]` block as the receipt arrival — jump straight to the six gates and the telemetry harvest below.
+3. **Settle.** After the six gates pass and a non-`none` `Docs delta` is settled through `/domain-modeling`, call `ack_receipt` with the injected `task_id` — that releases the checkout lock. Call `fail_receipt` instead when validation fails. If a runner is confirmed dead with no receipt arriving, `release_execution` is the recovery path; never spawn a second execution while the lock stands.
+
+The headless runner receives the `SPEC READY` contract, not the grill history — the same contract-level inheritance as the manual runbook. If the MCP server or the Stop hook is missing, fall back to the manual runbook above; do not simulate either half of the transport.
+
 ## Harness capability map
 
 This workflow is a Codex App adapter, so it depends on that harness's task tools by name. The names live here and nowhere else; everything below this section is written in capabilities. When a tool is renamed or reshaped, change this table only. The decision and its consequences live in [ADR 0003](../../../.agents/adr/0003-codex-app-fork-loop-is-an-adapter.md).
