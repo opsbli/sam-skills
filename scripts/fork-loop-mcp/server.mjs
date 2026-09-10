@@ -117,12 +117,31 @@ function extractSessionId(text) {
   return m ? m[0] : null;
 }
 
-/** Launch the headless runner; resolve with the runner's full stdout. */
-function runHeadless(checkout, prompt, maxTurns) {
+/**
+ * Launch the headless runner; resolve with the runner's full stdout.
+ * The prompt is written to a temp file and the runner is asked to Read it:
+ * Windows shells truncate multi-line argv at the first newline, but a file
+ * reference survives. Tested against 0.16.5 on win32.
+ */
+function runHeadless(checkout, prompt, maxTurns, taskId) {
   const cmd = resolveCliCommand(process.env);
   const [bin, ...baseArgs] = cmd.split(/\s+/);
-  const args = [...baseArgs, '-p', prompt, '--cwd', checkout, '--json'];
-  if (maxTurns) args.push('--max-turns', String(maxTurns));
+  const promptFile = path.join(stateRoot(checkout), `prompt-${taskId || Date.now()}.md`);
+  fs.mkdirSync(path.dirname(promptFile), { recursive: true });
+  fs.writeFileSync(promptFile, prompt);
+  const launchPrompt =
+    `Read ${promptFile.split(path.sep).join('/')} with the Read tool. ` +
+    'Its entire content is your launch instruction. Do not describe it, do not report on any pipeline state — follow it exactly and act now.';
+  // Strict parser (0.16.5) accepts only: help json output-format no-color no-browser
+  // browser-use browser-executable prompt attach cwd locale resume target target-replace
+  // continue force force-mcs mode verbose version stdio surface. Flags shown in help text
+  // but absent here (--max-turns, --settings, --permission-mode, --allowed-tools) are
+  // advertising/implementation mismatches — passing them aborts with "Unknown option".
+  // --json is deliberately NOT passed: its response field carries a summary persona that
+  // degrades execution (verified: same prompt with --json produced status reports instead
+  // of implementing; without it the runner completes the contract). Plain text stdout is
+  // captured and the receipt extracted from it.
+  const args = [...baseArgs, '-p', launchPrompt, '--cwd', checkout, '--mode', 'yolo'];
   return new Promise((resolve) => {
     let out = '';
     let err = '';
@@ -181,13 +200,43 @@ async function spawnExecution(args) {
     };
   }
   const prompt = [
-    'The following SPEC READY block is the launch command for this session. Run /spec-executor against it.',
-    'When finished, end your final message with exactly one complete SPEC EXECUTION RECEIPT block',
-    '(first field: Schema: spec-executor-receipt/v1). Do not commit, push, or take any external action.',
+    'You are the implementation agent. From this moment you implement, silently: no narration, no status reports,',
+    'no pipeline commentary. Your final message is ONLY the receipt block defined in step 6.',
+    '',
+    'Execute this contract now:',
+    '1. Read the repository instructions if present, then inspect the current code at the spec seam below.',
+    '2. Record the current HEAD as the review fixed point. Implement the narrowest change satisfying every',
+    '   acceptance criterion in the spec. Use the Edit/Write/Bash tools directly.',
+    '3. Validate: run the smallest applicable check for each criterion and capture the real command output.',
+    '4. Never commit, push, or take any external action. Leave all changes in the worktree.',
+    '5. Never touch anything under .zcode/ — that is pipeline plumbing, not the task.',
+    '6. End your FINAL message with exactly one complete receipt block and nothing else:',
+    '',
+    'SPEC EXECUTION RECEIPT',
+    '',
+    '- Schema: spec-executor-receipt/v2',
+    '- Conclusion: completed / partially completed / blocked',
+    '- Spec source: <path>',
+    '- Review fixed point: <baseline commit>',
+    '- Acceptance criteria: <each criterion with pass/fail and real evidence (commands + output)>',
+    '- Main changes:',
+    '- Changed files:',
+    '- Validation results:',
+    '- Not validated or not executed:',
+    '- Risks and remaining work:',
+    '- Planning-thread decision needed:',
+    '- Final worktree state:',
+    '- External effects: none',
+    '- Docs delta: <self-decided deviations / new constraints / new terms, one per line, or the literal word "none">',
+    '- Receipt metrics: fork-or-express: fork | archive-gates: pass | archive-gate-failures: 0 | grill-rounds: 0 | criteria-evidenced: <n>/<m> | docs-delta: <none|N> | skill-friction: none',
+    '',
+    'A blank Docs delta or missing Receipt metrics line makes the receipt invalid. Every criterion needs real evidence.',
+    '',
+    '=== THE APPROVED SPEC FOLLOWS ===',
     '',
     String(args.spec_ready),
   ].join('\n');
-  const result = await runHeadless(checkout, prompt, args.max_turns);
+  const result = await runHeadless(checkout, prompt, args.max_turns, task.id);
   const receipt = extractReceipt(result.out) || extractReceipt(result.err);
   const box = loadMailbox(checkout);
   const entry = {
