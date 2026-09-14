@@ -35,5 +35,6 @@ When the shape of that interface is itself in question — how deep the module i
 ## Rules of the loop
 
 - **Red before green.** Write the failing test first, then only enough code to pass it. Don't anticipate future tests or add speculative features.
+- **Coupling gate before GREEN.** GREEN means the mechanical coupling check passes, not just that the tests pass. If the repo ships a coupling gate (e.g. `scripts/test-coupling-gate.mjs` in this fork's repos), run it; otherwise run the equivalent check yourself: search every test file you created or changed for internal-member access (`._name` or `['_name']`). Any hit is implementation-coupled — rewrite the assertion through the public seam. "Follow the repo's testing conventions" does not exempt this check.
 - **One slice at a time.** One seam, one test, one minimal implementation per cycle.
 - **Refactoring is not part of the loop.** It belongs to the review stage (see the `code-review` skill), not the red → green implementation cycle.
