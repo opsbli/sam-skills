@@ -11,7 +11,7 @@ One row per golden task. Updated after each run. `Defect signals` at the bottom 
 | spec-executor — receipt contract discipline | spec-executor | 1 | 1/1 | — | 0 | 0 |
 | spec-executor — docs delta and fact settlement | spec-executor | 2 | 1/2 | `Docs delta: none` 掩盖 product-adjacent 决策（silent-deviation；复跑转绿） | 1 | 0 |
 | tdd — seams and red-green discipline | tdd | 2 | 1/2 | 批量写测试（run2；技能未被触达，首败 noise） | 1 | 0 |
-| tdd — test quality at the seam | tdd | 5 | 0/5 | 耦合缺陷已修复（run5 item3/5 首过，条款生效）；**残余独立缺陷：批量写测试（item4 5/5）** | 5 | 0 |
+| tdd — test quality at the seam | tdd | 6 | **1/6**（run6 gated fixture **5/5 满分**） | 双门端到端生效后清零：切片日志背书顺序纪律（+1/+0/+1/+0）、耦合门基线即抓预置耦合测试并推动转换、重构存活 6/6 | 5→0 | 0 |
 | code-review — fixed-point standards axis | code-review | 1 | 1/1 | — | 0 | 0 |
 | code-review — spec axis faithfulness | code-review | 1 | 1/1 | — | 0 | 0 |
 
@@ -21,7 +21,7 @@ One row per golden task. Updated after each run. `Defect signals` at the bottom 
 |---|---|---|
 | to-goal | 2/3 | 失败在输出介质歧义（复跑内联回传即过）；被测的 carried-forward 契约两轮全守住 |
 | spec-executor | 2/3 | 首败为执行侧偶发误读（复跑正确回传 Docs delta），契约本身有效 |
-| tdd | 2/7 | **耦合缺陷已修复**（run5 item3/5 首过：标记而非模仿预置耦合测试）；**残余：批量写测试独立 confirmed-defect**（tdd/02 item4 5/5 + tdd/01 run2 同挂，跨任务重复） |
+| tdd | 3/8 | **两项 confirmed-defect 均关闭且端到端验证**（run6 gated fixture 5/5 满分：切片日志背书顺序纪律、耦合门清零、重构存活 6/6）；gated fixture 形态为推荐部署 |
 | code-review | 2/2 | 双轴结构、机会主义改动识别、标准按名引用全部到位 |
 
 ## How to read it
@@ -40,5 +40,5 @@ One row per golden task. Updated after each run. `Defect signals` at the bottom 
 ## Defect signals
 
 - ~~tdd/02 耦合缺陷~~ — **已修复关闭**（run5：Inherited anti-patterns 条款生效，agent 标记而非模仿预置耦合测试，item3/5 首过；5 跑演进链：未加载 → 加载无条款 → 加载有条款被合理化 → 机械门 + 条款 → 生效）。残余教训已记录：prompt 级文本无法对抗显式矛盾指令，机械门（test-coupling-gate.mjs）承担兜底。
-- **tdd 批量写测试（Horizontal slicing）— confirmed-defect（跨任务），切片门处置已入库**：tdd/02 item4 5/5 全挂 + tdd/01 run2 item4 同挂。顺序性违规内容不可检测 → `scripts/tdd-slice-gate.mjs`（--init/--record/--verify，≤1 条新测试不变量，bulk 当场拦截）+ tdd SKILL.md「Slice gate for ordering」条款已应用；端到端待下轮 eval 验证。
+- ~~tdd 批量写测试（Horizontal slicing）~~ — **已修复关闭**（run6 gated fixture 端到端验证：切片日志 +1/+0/+1/+0 背书顺序纪律，`--verify` OK；切片门 + SKILL.md「Slice gate for ordering」条款组合生效）。维护观察：`node --test` 会自动发现 `scripts/test-coupling-gate.mjs` 并作为测试运行（门失败即套件失败）——意外的硬接线强化，属积极副作用。
 - to-goal/02 与 spec-executor/02 的首败经复跑转绿，定性 noise，不在本清单。
