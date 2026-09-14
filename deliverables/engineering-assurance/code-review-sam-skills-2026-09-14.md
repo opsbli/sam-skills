@@ -305,10 +305,9 @@ error: Could not read 6654f6b60cd9d5be8b54c6fafe44346dabeb3b76
 - **根因**：`.changeset/` 下 4 个 changeset 的 frontmatter 用 **skill 名当包名**（`ask-matt`、`code-review`、`to-goal`、`harvest`、`evals`、`project-standards`…，共 **24 个键**），而工作区里**唯一的包是根 `sam-skills`**（`skills/` 下没有任何 `package.json`）。
 - **影响**：`npm run version` 的第一步就是 `changeset version` → **必失败**。也就是说发布链比首轮报告描述的更早断（首轮说"版本 PR 变不绿"，实际是**版本命令根本跑不起来**）。这解释了 `CHANGELOG.md` 里那句 "manual bump（changelog-pat 拿不到）" 背后的真实处境。
 - **我做了什么**：本轮的 changeset（`fork-loop-and-gate-hardening.md`）用**合法包名** `sam-skills`，实测 `[OK]`；**没有**擅自改那 4 个既有 changeset——那属于仓库约定决策。
-- **两条修复路径（需你选）**：
-  1. **收敛到单包（机械、5 分钟）**：把 4 个 changeset 的 24 个键全部替换为 `"sam-skills": patch`，散文原样保留。`changeset version` 立即可用。
-  2. **让 skill 成为真正的 workspace 包**：给每个 skill 目录加 `package.json` + 根 `workspaces` 配置。这样 per-skill 版本语义成立，但仓库形态改变较大（约 40 个包），且 `privatePackages.version: true` 下每个 skill 会独立 bump。
-  - **建议选 1**：仓库现在只有根版本有意义（`1.2.3-to-goal.3`），per-skill 版本是未落地的心智模型。
+- **已按方案 1 修复（提交 `a6c293a`）**：4 个 changeset 的 24 个键收敛为 `"sam-skills": patch`，**散文逐字节保留**——行数差值恰好等于被收敛的键数，且 `lint-skills` 会读 changeset 文本用于 inherited-skill 的 `--diff-audit` 豁免，所以这点必须确认无虞。验证：`npx changeset status` → `Packages to be bumped at patch: sam-skills`；`verify:all` 仍 **13/13**。
+- **未采用的方案 2**：给每个 skill 目录加 `package.json` + 根 `workspaces`，让 per-skill 版本语义真正成立。仓库形态变化较大（约 40 个包），而目前只有根版本（`1.2.3-to-goal.3`）有意义。
+- **仍需注意（未修复）**：`.changeset/config.json` 的 changelog 用 `@changesets/changelog-github` 且指向 `opsbli/sam-skills`，本地既无 PAT、远端当前又不可达（502）→ **本地跑 `npm run version` 仍会在 changelog 步骤受阻**。但在 CI（`release.yml` 带 `GITHUB_TOKEN`）该步可用。**所以本次修复真正解锁的是 CI 的版本 PR 路径**——此前 `changeset version` 在**任何**环境都会因未知包名直接失败，版本 PR 连创建的机会都没有。
 
 ---
 
