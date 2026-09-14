@@ -40,7 +40,7 @@ Before drafting:
 6. Discover validation commands from the repository's own scripts, CI, documentation, and existing tests.
 7. Preserve user-established permissions and workspace boundaries from the source context.
 
-Keep this work read-only. Do not create status artifacts merely to build the goal.
+Keep this work read-only. Do not create status artifacts merely to build the goal. The compiled goal is returned **inline in your reply** as a paste block — never written to a file (including `.scratch/` or the tracker), even when the task's wording ("compile", "write") suggests an artifact.
 
 ## Select scope
 

@@ -11,4 +11,6 @@
   new:
   > Keep this work read-only. Do not create status artifacts merely to build the goal. The compiled goal is returned **inline in your reply** as a paste block — never written to a file (including `.scratch/` or the tracker), even when the task's wording ("compile", "write") suggests an artifact.
 
-- Approved: no
+- Approved: yes
+
+Applied: 2026-09-14 — old text verified in place at skills/engineering/to-goal/SKILL.md:43; inline-return clause appended; applied on main @ commit to be tagged eval-to-goal-medium-clause-20260914.
