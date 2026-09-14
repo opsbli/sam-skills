@@ -1,18 +1,23 @@
 #!/usr/bin/env node
 // receipt-gate.mjs — N1: receipt six-gate archival validator (US-4, MVP).
 //
-// Scripted form of the six archive gates. Contract sources:
-//   - receipt v2 schema (X1, frozen): skills/engineering/spec-executor/SKILL.md
-//   - gate table + error codes: delivery/系统设计.md §3.2.M6.3 / §3.5.1
+// Scripted form of the six archive gates. Contract source of truth:
+//   contracts/receipt-v2.json — schema token, heading, Conclusion vocabulary,
+//   the gate table, the error codes, and the list of every document that must
+//   describe the same contract. The rules are derived from it, and --check
+//   walks those landing points, so a version bump or a vocabulary change
+//   cannot land in one document and silently miss the others.
+//   Delivery documents (delivery/系统设计.md §3.2.M6.3 / §3.5.1) are optional
+//   landing points: checked while present, skipped once archived.
 // Gate mapping to the v2 receipt fields (the contract has no separate
 // "Outcome" field; the execution outcome IS the Conclusion line):
-//   pre.  first field must be exactly `Schema: spec-executor-receipt/v2`
+//   pre.  first field must be exactly the contract schema token
 //         — checked as part of Gate 2 parseability; mismatch -> 101011,
 //         never hand-patched (D39)
 //   1.    Conclusion outcome = completed                 -> 101001
 //   2.    exactly one parseable receipt in the file      -> 101002
 //   3.    Conclusion first line is a single token from
-//         {completed, blocked, failed}                   -> 101003
+//         the contract's conclusionTokens                 -> 101003
 //   4.    every Acceptance criteria entry carries a pass/fail
 //         marker followed by evidence (command/output/wording;
 //         a backtick span also counts)                   -> 101004
@@ -20,43 +25,62 @@
 //   6.    worktree file set matches the receipt's Final
 //         worktree state lines (git status --porcelain
 //         form, or plain paths; "clean"/"无改动" = empty) -> 101006
+//         Checked against --checkout (default: cwd), NOT against this
+//         validator's own repository.
 //   9xx.  validator-internal errors (unreadable file...) -> 901001, exit 9
 //
 // Modes:
-//   --receipt <path>   validate one receipt file; per-gate report on stdout,
+//   --receipt <path> [--checkout <dir>]
+//                      validate one receipt file; per-gate report on stdout,
 //                      JSON report line per FAIL, exit 0 / 1 / 9
 //   --receipt -        same as above, but read the raw receipt text from
 //                      stdin (piped auto/mailbox channel) instead of a file
-//   --check            anti-drift self-check: embedded gate rules must match
-//                      the contract sources (exit 0 = consistent)
+//   --check            anti-drift self-check: the contract and every landing
+//                      point it names must agree (exit 0 = consistent)
 //
 // refuse-not-degrade: a gate whose input is unavailable reports SKIP, never
 // PASS; the validator never repairs a receipt and writes nothing. Git
 // unavailable at Gate 6 is an explicit "无法核验" rejection, not a skip.
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..");
+const CONTRACT_PATH = join("contracts", "receipt-v2.json");
 const TENANT = "sam-skills";
-const SCHEMA_TOKEN = "spec-executor-receipt/v2";
-const HEADING = "SPEC EXECUTION RECEIPT";
-const CONCLUSION_TOKENS = ["completed", "blocked", "failed"];
-const GATES = [
-  { num: 1, label: "outcome=completed", code: "101001" },
-  { num: 2, label: "单一可解析 receipt", code: "101002" },
-  { num: 3, label: "Conclusion 单 token", code: "101003" },
-  { num: 4, label: "验收标准逐条有证据", code: "101004" },
-  { num: 5, label: "无待决规划决策", code: "101005" },
-  { num: 6, label: "工作树终态无意外漂移", code: "101006" },
-];
-const SCHEMA_MISMATCH_CODE = "101011";
-const INTERNAL_CODE = "901001";
 
+const CONTRACT = loadContract();
+const SCHEMA_TOKEN = CONTRACT.schema;
+const HEADING = CONTRACT.heading;
+const CONCLUSION_TOKENS = CONTRACT.conclusionTokens;
+const GATES = CONTRACT.gates.map((gate) => ({
+  num: gate.num,
+  label: gate.label,
+  code: gate.code,
+}));
+const SCHEMA_MISMATCH_CODE = CONTRACT.preGate.code;
+const INTERNAL_CODE = CONTRACT.internalErrorCode;
+
+// A new field starts only at a name the contract declares. Acceptance-criteria
+// entries are shaped exactly like fields (`- AC1: …`), so an unanchored parser
+// ended the Acceptance criteria block at the first criterion and graded whatever
+// followed — silently, because every later field still parsed.
 const FIELD_RE = /^\s*-\s*([A-Za-z][A-Za-z0-9 /-]*?)\s*:\s?(.*)$/;
-const MARKER_RE = /(pass|fail|✅|❌)/i;
+const FIELD_NAMES = new Set(Array.isArray(CONTRACT.fields) ? CONTRACT.fields : []);
+if (FIELD_NAMES.size === 0) {
+  console.error(
+    "receipt-gate: contracts/receipt-v2.json declares no `fields` list; without it the parser cannot tell a field from an acceptance-criteria entry.",
+  );
+  process.exit(9);
+}
+
+// Word-bounded. Unbounded, `bypass`, `failure`, `passenger` and `compass.ts` all
+// read as pass/fail markers, so `- AC2 implement bypass logic` satisfied Gate 4
+// — a verdict-shaped substring standing in for evidence.
+const MARKER_RE = /\b(?:pass|passed|fail|failed)\b|✅|❌/i;
+const EVIDENCE_RE = new RegExp(`(?:${MARKER_RE.source})\\s*[:：\\-—–]?\\s*([\\s\\S]*)$`, "i");
 
 function fail(code, gateNum, msg) {
   return { status: "FAIL", code, gateNum, msg };
@@ -81,7 +105,7 @@ function parseReceipt(text) {
       const raw = lines[i];
       if (/^\s*```/.test(raw)) continue; // transport fence noise
       const m = raw.match(FIELD_RE);
-      if (m) {
+      if (m && FIELD_NAMES.has(m[1].trim())) {
         current = { name: m[1].trim(), value: m[2], line: i + 1 };
         fields.push(current);
         continue;
@@ -124,11 +148,18 @@ function pathsFromWorktreeLines(value) {
   return paths;
 }
 
-function actualWorktreePaths() {
+/**
+ * Gate 6 must be checked against the tree the receipt describes, not the tree
+ * the validator happens to be installed in. Reading the validator's own repo
+ * made the gate meaningful only while dogfooding: shipped to a user's project
+ * it either always failed (a stray file in sam-skills) or always passed (a clean
+ * sam-skills) while saying nothing about the checkout under review.
+ */
+function actualWorktreePaths(worktreeDir) {
   let out;
   try {
     out = execFileSync("git", ["status", "--porcelain"], {
-      cwd: repo,
+      cwd: worktreeDir,
       encoding: "utf8",
     });
   } catch {
@@ -151,9 +182,9 @@ function actualWorktreePaths() {
 
 function evidencePresent(entry) {
   if (/`[^`]+`/.test(entry)) return true; // explicit command/output span
-  const m = entry.match(/(pass|fail|✅|❌)\s*[:：\-—–]?\s*([\s\S]*)$/i);
+  const m = entry.match(EVIDENCE_RE); // EVIDENCE_RE shares MARKER_RE's boundaries
   if (!m) return false;
-  const tail = m[2].replace(/[`*_\s:：，,。.；;—\-–]/g, "");
+  const tail = m[1].replace(/[`*_\s:：，,。.；;—\-–]/g, "");
   return tail.length >= 3;
 }
 
@@ -249,7 +280,7 @@ function gate5(fields) {
   return fail("101005", 5, `存在待决规划决策：${line1}`);
 }
 
-function gate6(fields) {
+function gate6(fields, worktreeDir) {
   const wt = fieldOf(fields, "Final worktree state");
   if (!wt) {
     return fail("101006", 6, "Final worktree state 缺失，无法核验工作树终态");
@@ -257,9 +288,13 @@ function gate6(fields) {
   // 契约口径（D39）：字段存在但为空（或 "clean"/"无改动"）= 报告为空集，
   // 与实际工作树比对；仅字段整体缺失才是无法核验。空值 + 实际脏 → 由下方漂移比对报 extra。
   const expected = pathsFromWorktreeLines(wt.value);
-  const actual = actualWorktreePaths();
+  const actual = actualWorktreePaths(worktreeDir);
   if (!actual.ok) {
-    return fail("101006", 6, "git 不可用，无法核验工作树终态（本门不跳过，整体拒绝归档）");
+    return fail(
+      "101006",
+      6,
+      `git 不可用（${worktreeDir}），无法核验工作树终态（本门不跳过，整体拒绝归档）`,
+    );
   }
   const expectedSet = new Set(expected);
   const actualSet = new Set(actual.paths);
@@ -269,7 +304,7 @@ function gate6(fields) {
     const parts = [];
     if (extra.length) parts.push(`实际多出 [${extra.slice(0, 5).join(", ")}${extra.length > 5 ? ", …" : ""}]`);
     if (missing.length) parts.push(`报告缺失 [${missing.slice(0, 5).join(", ")}${missing.length > 5 ? ", …" : ""}]`);
-    return fail("101006", 6, `工作树与 receipt 报告终态漂移：${parts.join("；")}`);
+    return fail("101006", 6, `工作树（${worktreeDir}）与 receipt 报告终态漂移：${parts.join("；")}`);
   }
   return pass(
     expected.length
@@ -312,6 +347,19 @@ function internalError(msg) {
   process.exit(9);
 }
 
+// The contract is the validator's only source of rules. If it cannot be read
+// there is nothing to validate against, so this is an internal error, not a
+// degraded run.
+function loadContract() {
+  try {
+    return JSON.parse(readFileSync(join(repo, CONTRACT_PATH), "utf8"));
+  } catch (error) {
+    internalError(
+      `receipt contract unreadable: ${CONTRACT_PATH} (${error.message})`,
+    );
+  }
+}
+
 function readReceiptSource(receiptPath) {
   // stdin mode: `--receipt -` reads the raw receipt text from the pipe
   // (the auto/mailbox channel, US-4 §数据描述) instead of a file.
@@ -331,7 +379,7 @@ function readReceiptSource(receiptPath) {
   }
 }
 
-function runValidation(receiptPath) {
+function runValidation(receiptPath, worktreeDir) {
   const text = readReceiptSource(receiptPath).replace(/^\uFEFF/, "");
   const traceId =
     receiptPath === "-"
@@ -356,7 +404,7 @@ function runValidation(receiptPath) {
   }
   results.push({
     num: 6,
-    result: parseable ? gate6(parsed.fields) : skip("receipt 不可解析，无法读取 Final worktree state"),
+    result: parseable ? gate6(parsed.fields, worktreeDir) : skip("receipt 不可解析，无法读取 Final worktree state"),
   });
   results.sort((a, b) => a.num - b.num);
 
@@ -382,44 +430,71 @@ function runValidation(receiptPath) {
 
 function runCheck() {
   const problems = [];
-  if (GATES.length !== 6) problems.push(`内置门数量 ${GATES.length} ≠ 6`);
-  const codes = GATES.map((g) => g.code);
+
+  // 1. The contract must be internally coherent.
+  if (GATES.length !== 6) problems.push(`契约门数量 ${GATES.length} ≠ 6`);
+  const codes = GATES.map((gate) => gate.code);
   if (new Set(codes).size !== codes.length) problems.push("门错误码存在重复");
-  for (const code of codes) {
+  for (const code of [...codes, SCHEMA_MISMATCH_CODE, INTERNAL_CODE]) {
     if (!/^\d{6}$/.test(code)) problems.push(`错误码 ${code} 非 6 位数字`);
   }
-  if (CONCLUSION_TOKENS.join("/") !== "completed/blocked/failed") {
-    problems.push("Conclusion 合法 token 集偏离契约口径（completed/blocked/failed）");
+  if (!Array.isArray(CONCLUSION_TOKENS) || CONCLUSION_TOKENS.length < 2) {
+    problems.push("conclusionTokens 至少需列出两个结果");
   }
-  if (!/^[a-z-]+\/v\d+$/.test(SCHEMA_TOKEN)) {
+  for (const token of CONCLUSION_TOKENS || []) {
+    if (/\s/.test(token)) {
+      problems.push(`Conclusion token "${token}" 含空格——门 3 只接受单一 token`);
+    }
+  }
+  if (!(CONCLUSION_TOKENS || []).includes("completed")) {
+    problems.push("conclusionTokens 必须包含 completed（门 1 只放行该结果）");
+  }
+  if (!/^[a-z0-9-]+\/v\d+$/.test(SCHEMA_TOKEN)) {
     problems.push(`Schema token 格式异常: ${SCHEMA_TOKEN}`);
   }
+  if (!HEADING) problems.push("heading 缺失");
 
-  let skill = "";
-  try {
-    skill = readFileSync(
-      join(repo, "skills", "engineering", "spec-executor", "SKILL.md"),
-      "utf8",
-    );
-  } catch {
-    problems.push("契约源不可读: skills/engineering/spec-executor/SKILL.md");
+  // 2. Every landing point must actually carry the contract it claims to
+  // describe. This is the check that makes a version bump mechanical: the
+  // landing list is the inventory of documents that speak the contract.
+  const points = Array.isArray(CONTRACT.landingPoints) ? CONTRACT.landingPoints : [];
+  if (points.length === 0) {
+    problems.push("landingPoints 为空——契约漂移将无人拦截");
   }
-  if (skill && !skill.includes(`Schema: ${SCHEMA_TOKEN}`)) {
-    problems.push(`spec-executor SKILL.md 不含 "Schema: ${SCHEMA_TOKEN}"（Schema 版本漂移？）`);
+  if (points.every((point) => point.required === false)) {
+    problems.push("所有落点均为 optional——契约实际上未被强制");
   }
-  if (skill && !skill.includes(HEADING)) {
-    problems.push(`spec-executor SKILL.md 不含 "${HEADING}" 模板`);
-  }
-
-  let sys = "";
-  try {
-    sys = readFileSync(join(repo, "delivery", "系统设计.md"), "utf8");
-  } catch {
-    problems.push("契约源不可读: delivery/系统设计.md（错误码注册表 §3.5.1）");
-  }
-  if (sys) {
-    for (const code of [...codes, SCHEMA_MISMATCH_CODE, INTERNAL_CODE]) {
-      if (!sys.includes(code)) problems.push(`系统设计错误码注册表缺少 ${code}`);
+  // `{schema}` expands to the contract's version, and every
+  // spec-executor-receipt/v<N> that is not that version is stale wherever it
+  // sits. Without the scan, a version bump applied to the contract's `schema`
+  // field but not to its own landing-point tokens would pass silently.
+  const expectedVersion = SCHEMA_TOKEN.split("/v")[1];
+  const versionRe = /spec-executor-receipt\\?\/v(\d+)/g;
+  for (const point of points) {
+    const file = join(repo, point.path);
+    if (!existsSync(file)) {
+      if (point.required !== false) problems.push(`落点文件缺失: ${point.path}`);
+      continue;
+    }
+    const source = readFileSync(file, "utf8");
+    for (const raw of point.mustContain || []) {
+      const token = raw.replace(/\{schema\}/g, SCHEMA_TOKEN);
+      if (!source.includes(token)) {
+        problems.push(`${point.path} 不含 "${token}"（契约漂移？）`);
+      }
+    }
+    for (const raw of point.mustNotContain || []) {
+      const token = raw.replace(/\{schema\}/g, SCHEMA_TOKEN);
+      if (source.includes(token)) {
+        problems.push(`${point.path} 仍含过期契约文本 "${token}"`);
+      }
+    }
+    for (const match of source.matchAll(versionRe)) {
+      if (match[1] !== expectedVersion) {
+        problems.push(
+          `${point.path} 提及 spec-executor-receipt/v${match[1]}，契约当前为 v${expectedVersion}（升版未同步？）`,
+        );
+      }
     }
   }
 
@@ -428,22 +503,37 @@ function runCheck() {
     for (const p of problems) console.error(`  ${p}`);
     process.exit(1);
   }
-  console.log("校验器规则与契约文档一致：OK（防漂移自检通过）");
+  console.log(
+    `校验器规则与契约文档一致：OK（防漂移自检通过 — ${SCHEMA_TOKEN}，${GATES.length} 门，${points.length} 个落点）`,
+  );
   process.exit(0);
 }
 
 function usage() {
   console.error(`用法:
-  node scripts/receipt-gate.mjs --receipt <receipt 文件路径>   # 六道门校验（exit 0 全过 / 1 拦截 / 9 内部错误）
-  node scripts/receipt-gate.mjs --receipt -                   # 同上，但 receipt 文本从 stdin 管道读取
-  node scripts/receipt-gate.mjs --check                       # 防漂移自检（规则与契约文档一致性）`);
+  node scripts/receipt-gate.mjs --receipt <receipt 文件路径> [--checkout <工作树>]
+                                                              # 六道门校验（exit 0 全过 / 1 拦截 / 9 内部错误）
+  node scripts/receipt-gate.mjs --receipt - [--checkout <工作树>]
+                                                              # 同上，但 receipt 文本从 stdin 管道读取
+  node scripts/receipt-gate.mjs --check                       # 防漂移自检（规则与契约文档一致性）
+
+  --checkout 指定 Gate 6 要比对的工作树（默认当前目录）。校验器装在别处时
+  必须显式传入，否则 Gate 6 比对的是校验器自己所在仓库。`);
 }
 
 const args = process.argv.slice(2);
+const checkoutIdx = args.indexOf("--checkout");
+const checkoutArg = checkoutIdx >= 0 ? args[checkoutIdx + 1] : null;
+if (checkoutIdx >= 0 && !checkoutArg) {
+  console.error("--checkout requires a path");
+  process.exit(2);
+}
+const worktreeDir = checkoutArg || process.cwd();
+
 if (args[0] === "--check") {
   runCheck();
 } else if (args[0] === "--receipt" && args[1]) {
-  runValidation(args[1]);
+  runValidation(args[1], worktreeDir);
 } else if (args[0] === "--help" || args[0] === "-h") {
   usage();
   process.exit(0);

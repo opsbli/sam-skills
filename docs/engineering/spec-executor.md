@@ -6,7 +6,7 @@ It does not rewrite the approved spec into another long goal. The inherited plan
 
 ## When to reach for it
 
-Type `/spec-executor`, or the agent reaches for it automatically when a forked conversation contains a final `SPEC READY` block and asks for implementation.
+You invoke this by typing `/spec-executor` — the agent won't reach for it on its own. That is deliberate: it runs in the forked execution thread that has inherited a final `SPEC READY` block, and keeping implementation out of the planning thread is the whole point, so nothing may begin an execution implicitly.
 
 | Situation | Route |
 |---|---|

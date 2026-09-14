@@ -1,0 +1,113 @@
+{
+  "$comment": "The receipt contract, in one machine-readable place. The validator (scripts/receipt-gate.mjs) derives its rules from here, and `receipt-gate.mjs --check` walks every landing point below — so bumping the Schema version, renaming a field, or changing the Conclusion vocabulary cannot land in one document and silently miss the others. Landing-point tokens use the {schema} placeholder, expanded from the `schema` field at check time; the checker additionally scans every landing point for any spec-executor-receipt/v<N> other than the current one, so a half-finished version bump fails instead of passing. Historical records are deliberately NOT landing points: docs/evals/results/**, docs/evals/tasks/**, closed draft proposals, and ADRs describe what was true at the time and must never be rewritten to match today's contract.",
+  "schema": "spec-executor-receipt/v2",
+  "heading": "SPEC EXECUTION RECEIPT",
+  "conclusionTokens": ["completed", "blocked", "failed"],
+  "$conclusionSemantics": "One single token on the first line; a justification sentence may follow on the next line. `completed` is the only outcome archive gate 1 admits. Partial work is reported as `blocked` (with the remainder listed) — never as a two-word token, which gate 3 rejects by design.",
+  "$fieldsComment": "The exhaustive set of lines that start a new field. The parser needs it because an Acceptance criteria entry is shaped exactly like a field (`- AC1: …`): without this list the criteria block ended at the first entry and gate 4 graded the wrong text — silently, since every later field still parsed. A receipt field that is missing here is read as a continuation of the previous field, so this list and the launch prompt in scripts/fork-loop-mcp/server.mjs must agree.",
+  "fields": [
+    "Schema",
+    "Conclusion",
+    "Spec source",
+    "Review fixed point",
+    "Acceptance criteria",
+    "Main changes",
+    "Changed files",
+    "Branch / commit / review",
+    "Validation results",
+    "Review findings",
+    "Not validated or not executed",
+    "Risks and remaining work",
+    "Planning-thread decision needed",
+    "Final worktree state",
+    "External effects",
+    "Docs delta",
+    "Receipt metrics",
+    "Goal / spec quality"
+  ],
+  "gates": [
+    { "num": 1, "code": "101001", "label": "outcome=completed" },
+    { "num": 2, "code": "101002", "label": "单一可解析 receipt" },
+    { "num": 3, "code": "101003", "label": "Conclusion 单 token" },
+    { "num": 4, "code": "101004", "label": "验收标准逐条有证据" },
+    { "num": 5, "code": "101005", "label": "无待决规划决策" },
+    { "num": 6, "code": "101006", "label": "工作树终态无意外漂移" }
+  ],
+  "preGate": { "code": "101011", "label": "Schema 首字段匹配" },
+  "internalErrorCode": "901001",
+  "landingPoints": [
+    {
+      "path": "skills/engineering/spec-executor/SKILL.md",
+      "required": true,
+      "mustContain": ["Schema: {schema}", "SPEC EXECUTION RECEIPT"],
+      "mustNotContain": ["partially completed"]
+    },
+    {
+      "path": "skills/engineering/execute-spec-in-fork/SKILL.md",
+      "required": true,
+      "mustContain": ["Schema: {schema}"]
+    },
+    {
+      "path": "scripts/receipt-gate.mjs",
+      "required": true,
+      "mustContain": ["contracts/receipt-v2.json"]
+    },
+    {
+      "path": "scripts/receipt-gate.test.mjs",
+      "required": true,
+      "mustContain": ["Schema: {schema}"]
+    },
+    {
+      "path": "scripts/fork-loop-mcp/server.mjs",
+      "required": true,
+      "mustContain": ["Schema: {schema}", "SPEC EXECUTION RECEIPT"],
+      "mustNotContain": ["partially completed"]
+    },
+    {
+      "path": "scripts/fork-loop-mcp/test/mailbox-cycle.test.mjs",
+      "required": true,
+      "mustContain": ["Schema: {schema}"]
+    },
+    {
+      "path": "README.md",
+      "required": true,
+      "mustContain": ["Schema: {schema}"]
+    },
+    {
+      "path": "docs/engineering/spec-executor.md",
+      "required": true,
+      "mustContain": ["Schema: {schema}"]
+    },
+    {
+      "path": "docs/engineering/execute-spec-in-fork.md",
+      "required": true,
+      "mustContain": ["Schema: {schema}"]
+    },
+    {
+      "path": "docs/maintaining-fork.md",
+      "required": true,
+      "mustContain": ["Schema: {schema}"]
+    },
+    {
+      "$comment": "Delivery documents are the project's process artifacts, not the contract. Checked while present so they cannot drift, skipped once archived — a validator that breaks because a design document was filed elsewhere is coupling, not rigour.",
+      "path": "delivery/系统设计.md",
+      "required": false,
+      "mustContain": ["spec-executor-receipt", "101001", "101011", "901001"]
+    },
+    {
+      "path": "delivery/UserStory.md",
+      "required": false,
+      "mustContain": ["spec-executor-receipt"]
+    },
+    {
+      "path": "delivery/安全设计.md",
+      "required": false,
+      "mustContain": ["101011"]
+    },
+    {
+      "path": "delivery/部署设计.md",
+      "required": false,
+      "mustContain": ["101011"]
+    }
+  ]
+}

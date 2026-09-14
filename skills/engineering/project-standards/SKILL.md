@@ -1,6 +1,6 @@
 ---
 name: project-standards
-description: "Generate, update, or audit a repo's enforceable engineering standards document (docs/agents/project-standards.md) by exploring the actual code: skeleton and layering rules, DDL/migration discipline, generator templates, test and verification floors, config and secrets rules. Use when the user wants to codify team conventions, stop agents from guessing project rules, generate a tech-stack/framework standards doc, or check code against it. Facts are found by exploration agents; standards are confirmed by humans — never the other way round."
+description: "Generate, update, or audit a repo's enforceable engineering standards document (docs/agents/project-standards.md) from what the code actually does — skeleton and layering rules, DDL/migration discipline, generator templates, test and verification floors, config and secrets rules. Facts are found by exploration agents; standards are confirmed by humans — never the other way round."
 disable-model-invocation: true
 ---
 

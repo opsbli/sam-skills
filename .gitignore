@@ -7,3 +7,12 @@ node_modules
 
 # WorkBuddy worktree-local session state (logs, scratch) — tool data, not project content
 .workbuddy/
+
+# Local markdown issue tracker (`.scratch/<feature>/`, the convention documented in
+# README.md). Work state, not project content: tracked, it would drift against
+# whoever wrote it last and turn up as review noise.
+.scratch/
+
+# The tdd slice gate's ordering ledger, written to the current directory. It is a
+# per-loop run log, not a source artifact.
+.tdd-slice-log.jsonl

@@ -1,6 +1,7 @@
 ---
 name: spec-executor
-description: Execute the latest approved SPEC READY from an inherited or forked conversation, keeping implementation work out of the planning thread. Use after to-spec when the final spec fits one implementation session and the new thread should implement, test, review, and return a structured receipt without rewriting a to-goal handoff. Do not use for unresolved specs, multi-session builds, parallel handoffs, or context that needs compression; use to-tickets or to-goal for those.
+description: Implement one approved SPEC READY in a forked execution thread and return a structured execution receipt to the planning thread, without rewriting the spec into a second goal.
+disable-model-invocation: true
 ---
 
 # Spec Executor
@@ -68,7 +69,7 @@ Do not write a handoff file unless requested. End with one copy-pasteable block:
 SPEC EXECUTION RECEIPT
 
 - Schema: spec-executor-receipt/v2 (required, must be the first field)
-- Conclusion: <exactly one of: completed / partially completed / blocked - first line must be the single token; one sentence of justification may follow on the next line>
+- Conclusion: <exactly one of: completed / blocked / failed — the first line must be the single token; one sentence of justification may follow on the next line. Partial work is reported as blocked, with the remainder listed under Risks and remaining work. A two-word outcome is rejected by the archive validator.>
 - Spec source:
 - Review fixed point:
 - Acceptance criteria: <each criterion with pass/fail and evidence>

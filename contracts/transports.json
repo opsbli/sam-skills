@@ -1,0 +1,33 @@
+{
+  "$comment": "The transport registry, in one machine-readable place. `execute-spec-in-fork` carried the transport list in prose across three places — the ordered detection list, one route section per transport, and the README tables — with nothing tying them together, so adding a fourth transport meant remembering 7-8 hand edits and any miss left the router describing a transport the code did not have. This file is the list; scripts/transport-gate.mjs asserts the skill still agrees with it. It deliberately does NOT generate the prose (the wording is the skill's job) — it only refuses to let the two drift apart silently.",
+  "detectionList": {
+    "path": "skills/engineering/execute-spec-in-fork/SKILL.md",
+    "heading": "## Pick the transport (detect in this order)"
+  },
+  "transports": [
+    {
+      "id": "codex-app",
+      "detectionToken": "**Codex App**",
+      "routeHeading": "## Codex App route",
+      "implementation": null,
+      "decision": ".agents/adr/0003-codex-app-fork-loop-is-an-adapter.md",
+      "note": "Harness-specific tool names live only in this route's capability table."
+    },
+    {
+      "id": "fork-loop-mcp",
+      "detectionToken": "**fork-loop MCP**",
+      "routeHeading": "## ZCode automatic route",
+      "implementation": "scripts/fork-loop-mcp/server.mjs",
+      "decision": ".agents/adr/0005-zcode-fork-loop-mcp-mailbox.md",
+      "note": "The machine-locked route: spawn_execution / check_mailbox / ack_receipt."
+    },
+    {
+      "id": "manual-runbook",
+      "detectionToken": "**Neither**",
+      "routeHeading": "## Manual fallback runbook",
+      "implementation": null,
+      "decision": null,
+      "note": "The honest fallback. A missing transport is named, never simulated."
+    }
+  ]
+}

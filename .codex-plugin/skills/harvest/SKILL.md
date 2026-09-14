@@ -1,6 +1,6 @@
 ---
 name: harvest
-description: "Turn the spec-execution pipeline's telemetry ledgers into skill-revision proposals: read docs/metrics.md and docs/skill-friction-log.md, add repeat friction and receipt quality labels, then draft a concrete SKILL.md or AGENTS.md diff for every confirmed defect. Nothing edits a skill file directly — proposals wait in docs/evals/draft-proposals/ for explicit human approval. Run it periodically, or right after /project-standards audit when the friction log has new entries."
+description: "Turn the spec-execution pipeline's telemetry ledgers (docs/metrics.md, docs/skill-friction-log.md, and the eval scoreboard) into concrete skill-revision proposals: repeat friction and repeating receipt-quality labels become a drafted SKILL.md or AGENTS.md diff. Nothing edits a skill file directly — proposals wait in docs/evals/draft-proposals/ for explicit human approval."
 disable-model-invocation: true
 ---
 

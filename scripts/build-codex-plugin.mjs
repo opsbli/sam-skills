@@ -7,6 +7,14 @@
 // directories into .codex-plugin/skills/ as a flat, committed copy and stamps
 // .codex-plugin/plugin.json from package.json.
 //
+// The manifest is reproduced *faithfully*, including the parts that are not
+// derived from package.json: the fork-loop MCP server block (rewritten to
+// ${CODEX_PLUGIN_ROOT}), and the Stop hook copied from .claude-plugin/hooks/.
+// A generator that emits less than the committed artifact is worse than no
+// generator: running it deletes the difference, and --check then goes green
+// over a plugin that quietly lost its transport. Every hand-added part of the
+// committed payload must have a counterpart here.
+//
 // Modes:
 //   (default)  regenerate .codex-plugin/ in place
 //   --check    verify the committed payload is fresh; exit 1 on drift (CI gate)
@@ -69,6 +77,15 @@ function buildManifest() {
           developerName: "opsbli",
           category: "Productivity",
         },
+        // Hand-added to the committed payload; reproduced here so regenerating
+        // cannot silently drop the Codex plugin's automatic transport.
+        mcpServers: {
+          "fork-loop": {
+            type: "stdio",
+            command: "node",
+            args: ["${CODEX_PLUGIN_ROOT}/scripts/fork-loop-mcp/server.mjs"],
+          },
+        },
       },
       null,
       2,
@@ -83,6 +100,12 @@ function generate(targetRoot) {
   for (const rel of claudePlugin.skills) {
     const name = rel.split("/").pop();
     cpSync(join(repo, rel), join(skillsDir, name), { recursive: true });
+  }
+  // The Stop hook that delivers receipts is part of the shipped payload, not
+  // only of the Claude manifest — mirror the hook directory as well.
+  const hooksSrc = join(repo, ".claude-plugin", "hooks");
+  if (existsSync(hooksSrc)) {
+    cpSync(hooksSrc, join(pluginDir, "hooks"), { recursive: true });
   }
   writeFileSync(join(pluginDir, "plugin.json"), buildManifest(), {
     encoding: "utf8",
@@ -133,7 +156,7 @@ try {
     for (const f of expected.filter((f) => actSet.has(f))) {
       const a = readFileSync(join(actualRoot, f));
       const b = readFileSync(join(expectedRoot, f));
-      if (!a.equals(b)) errors.push(`drifted: .codex-plugin/${f}`);
+      if (!sameContent(a, b)) errors.push(`drifted: .codex-plugin/${f}`);
     }
   }
   if (errors.length) {
@@ -146,4 +169,17 @@ try {
   console.log("codex plugin payload fresh");
 } finally {
   rmSync(tmp, { recursive: true, force: true });
+}
+
+// Line endings are a checkout artifact (core.autocrlf on Windows), not drift.
+// plugin.json is written with LF while a Windows working tree holds CRLF, so a
+// byte comparison reports a false positive on every such clone. Compare text
+// with CRLF normalised; compare anything containing a NUL byte byte-wise.
+function sameContent(a, b) {
+  if (a.equals(b)) return true;
+  if (a.includes(0) || b.includes(0)) return false;
+  return (
+    a.toString("utf8").replace(/\r\n/g, "\n") ===
+    b.toString("utf8").replace(/\r\n/g, "\n")
+  );
 }

@@ -8,6 +8,10 @@
 //   upstream ref exceeds the line budget without a changeset mentioning the
 //   skill name are reported. Currently warn-only (exit 0); becomes a hard
 //   gate after two releases.
+//   Exits 2 — never 0 — whenever the audit cannot actually run (missing ref,
+//   unreadable commit object, unreachable merge base, empty inherited set,
+//   or a diff that errors instead of returning empty). Reporting OK over an
+//   empty run is the one outcome this guard must never produce.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -20,25 +24,67 @@ const NON_PROMOTED = ["misc", "in-progress", "deprecated"];
 const ALL_BUCKETS = [...PROMOTED, ...NON_PROMOTED];
 
 // Skills this fork owns end to end; their diffs against upstream are the
-// fork's reason to exist and are exempt from expression-layer budgeting.
-const FORK_OWNED = new Set([
-  "engineering/to-goal",
-  "engineering/goal-crafter",
-  "engineering/spec-executor",
-  "engineering/execute-spec-in-fork",
-  "engineering/roundtable",
-]);
+// fork's reason to exist and are exempt from expression-layer budgeting. The
+// list lives in contracts/fork-authorship.json so the lint, the fork docs, and
+// the PR template cannot drift apart on who is fork-owned. This used to be a
+// hardcoded Set, which is how project-standards and harvest ended up treated
+// as inherited skills the fork had written itself.
+const FORK_AUTHORSHIP_PATH = join("contracts", "fork-authorship.json");
 
 const DIFF_AUDIT_LINE_BUDGET = 40;
 
+function forkOwnedIds() {
+  let parsed;
+  try {
+    parsed = JSON.parse(read(FORK_AUTHORSHIP_PATH));
+  } catch (error) {
+    console.error(
+      `lint: cannot read ${FORK_AUTHORSHIP_PATH} (${error.message}) — the fork-authored skill list is the source of truth for the diff-audit exemption`,
+    );
+    process.exit(2);
+  }
+  if (!Array.isArray(parsed.skillIds)) {
+    console.error(`lint: ${FORK_AUTHORSHIP_PATH} must carry a skillIds array`);
+    process.exit(2);
+  }
+  return new Set(parsed.skillIds);
+}
+
+// diff-audit fails closed. A guard that reports OK without having audited
+// anything is worse than no guard, so every condition that makes the audit
+// vacuous (unresolvable ref, unreadable commit object, unreachable merge base,
+// an empty inherited-skill set, a diff that errors instead of returning empty)
+// exits 2 — never a green line over an empty run.
 function runDiffAudit(ref) {
   const git = (args) =>
     execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim();
-  try {
-    git(["rev-parse", "--verify", ref]);
-  } catch {
-    console.error(`diff-audit: ref not found: ${ref} (fetch upstream first)`);
+
+  const abort = (message) => {
+    console.error(`diff-audit: ${message}`);
+    console.error("diff-audit: refusing to report OK on an audit that did not run");
     process.exit(2);
+  };
+
+  try {
+    git(["rev-parse", "--verify", `${ref}^{commit}`]);
+  } catch {
+    abort(`ref not found: ${ref} (fetch upstream first, e.g. git fetch upstream main)`);
+  }
+
+  // A ref can resolve while its commit object is missing (partial clone,
+  // pruned pack, grafted history). `A...B` then fails for every path, and the
+  // old code swallowed that into an empty — but green — report.
+  try {
+    git(["cat-file", "-e", `${ref}^{commit}`]);
+  } catch {
+    abort(`ref ${ref} resolves but its commit object is unreadable in this clone`);
+  }
+
+  let mergeBase;
+  try {
+    mergeBase = git(["merge-base", ref, "HEAD"]);
+  } catch {
+    abort(`no reachable merge base between ${ref} and HEAD`);
   }
 
   const changesetText = readdirSync(join(repo, ".changeset"))
@@ -46,43 +92,70 @@ function runDiffAudit(ref) {
     .map((name) => readFileSync(join(repo, ".changeset", name), "utf8"))
     .join("\n");
 
-  const warnings = [];
-  const rows = [];
+  const targets = [];
+  const FORK_OWNED = forkOwnedIds();
   for (const bucket of PROMOTED) {
     for (const name of listSkillDirs(bucket)) {
       const skillId = id(bucket, name);
       if (FORK_OWNED.has(skillId)) continue;
-      let numstat;
-      try {
-        numstat = git([
-          "diff",
-          "--numstat",
-          "-w",
-          `${ref}...HEAD`,
-          "--",
-          join("skills", bucket, name),
-        ]);
-      } catch {
-        continue;
-      }
-      if (!numstat) continue;
-      let changed = 0;
-      for (const line of numstat.split("\n")) {
-        const [added, removed] = line.split("\t");
-        changed += (parseInt(added, 10) || 0) + (parseInt(removed, 10) || 0);
-      }
-      if (changed === 0) continue;
-      const justified = changesetText.includes(name);
-      rows.push({ skillId, changed, justified });
-      if (changed > DIFF_AUDIT_LINE_BUDGET && !justified) {
-        warnings.push(
-          `${skillId}: ${changed} changed lines vs ${ref} with no changeset mentioning "${name}" — expression-layer edits to inherited skills need justification (see docs/maintaining-fork.md, "Inherited-skill change policy")`,
-        );
-      }
+      targets.push({ skillId, name, skillPath: join("skills", bucket, name) });
+    }
+  }
+  if (targets.length === 0) {
+    abort(
+      "every promoted skill is classified fork-owned, so there is nothing to audit (check contracts/fork-authorship.json)",
+    );
+  }
+
+  const warnings = [];
+  const rows = [];
+  const unreadable = [];
+  let audited = 0;
+
+  for (const { skillId, name, skillPath } of targets) {
+    let numstat;
+    try {
+      numstat = git(["diff", "--numstat", "-w", `${ref}...HEAD`, "--", skillPath]);
+    } catch {
+      unreadable.push(skillId);
+      continue;
+    }
+    audited += 1;
+    if (!numstat) continue;
+    let changed = 0;
+    for (const line of numstat.split("\n")) {
+      const [added, removed] = line.split("\t");
+      changed += (parseInt(added, 10) || 0) + (parseInt(removed, 10) || 0);
+    }
+    if (changed === 0) continue;
+    const justified = changesetText.includes(name);
+    rows.push({ skillId, changed, justified });
+    if (changed > DIFF_AUDIT_LINE_BUDGET && !justified) {
+      warnings.push(
+        `${skillId}: ${changed} changed lines vs ${ref} with no changeset mentioning "${name}" — expression-layer edits to inherited skills need justification (see docs/maintaining-fork.md, "Inherited-skill change policy")`,
+      );
     }
   }
 
-  console.log(`diff-audit vs ${ref} (budget ${DIFF_AUDIT_LINE_BUDGET} lines, fork-owned exempt):`);
+  if (unreadable.length) {
+    console.error(
+      `diff-audit: ${unreadable.length}/${targets.length} inherited skills could not be diffed against ${ref}:`,
+    );
+    for (const skillId of unreadable) console.error(`  ${skillId}`);
+    abort("partial audit");
+  }
+  if (audited !== targets.length) {
+    abort(
+      `audited ${audited} of ${targets.length} inherited skills (merge base ${mergeBase})`,
+    );
+  }
+
+  console.log(
+    `diff-audit vs ${ref} (budget ${DIFF_AUDIT_LINE_BUDGET} lines, fork-owned exempt, merge base ${mergeBase.slice(0, 7)}):`,
+  );
+  console.log(
+    `  audited ${audited}/${targets.length} inherited skills, ${rows.length} with changes${rows.length ? "" : " (all clean vs upstream)"}`,
+  );
   for (const row of rows.sort((a, b) => b.changed - a.changed)) {
     console.log(
       `  ${row.changed}\t${row.skillId}${row.justified ? " (changeset)" : ""}`,
@@ -165,8 +238,33 @@ function invocationOf(bucket, name) {
   return {
     disable: hasDisableModelInvocation(skillMd),
     denyImplicit: hasDenyImplicitInvocation(openaiYaml),
+    description: skillDescription(skillMd),
   };
 }
+
+// The frontmatter `description`, inline or as a `>` / `|` block scalar.
+function skillDescription(skillMd) {
+  const lines = frontmatter(skillMd).split(/\r?\n/);
+  const idx = lines.findIndex((line) => /^description:/.test(line));
+  if (idx < 0) return "";
+  const inline = lines[idx].replace(/^description:\s*/, "").trim();
+  if (inline && !/^[>|]/.test(inline)) {
+    return inline.replace(/^["']|["']$/g, "");
+  }
+  const block = [];
+  for (let i = idx + 1; i < lines.length; i += 1) {
+    if (/^\S/.test(lines[i])) break;
+    block.push(lines[i].trim());
+  }
+  return block.join(" ").trim();
+}
+
+// A user-invoked skill's description is human-facing (a line in the slash-command
+// list), so model-trigger phrasing there is dead weight at best — and at worst it
+// invites the reader to expect automatic invocation the skill can never get
+// (.agents/invocation.md, "Model-invoked vs user-invoked").
+const MODEL_TRIGGER_RE =
+  /\buse (when|after|this|it)\b|\bwhen the user\b|\brun it\b|\bdon'?t invoke\b|\btrigger phrases?\b/i;
 
 function extractLinks(markdown, pattern) {
   const links = [];
@@ -193,6 +291,16 @@ for (const bucket of PROMOTED) {
   }
 }
 const promotedIds = new Set(promoted.keys());
+
+// The fork-authored list must name promoted skills that exist. A stale id
+// exempts nothing and silently drops a real skill into the drift audit's
+// inherited set; a missing id does the reverse.
+const forkOwned = forkOwnedIds();
+for (const skillId of forkOwned) {
+  if (!promotedIds.has(skillId)) {
+    fail(`contracts/fork-authorship.json lists a skill that is not promoted: ${skillId}`);
+  }
+}
 
 const nonPromoted = [];
 for (const bucket of NON_PROMOTED) {
@@ -339,7 +447,8 @@ for (const { bucket, name } of [
   ...promoted.values(),
   ...nonPromoted,
 ]) {
-  const { disable, denyImplicit } = invocationOf(bucket, name);
+  const skillId = id(bucket, name);
+  const { disable, denyImplicit, description } = invocationOf(bucket, name);
   const skill = `skills/${bucket}/${name}`;
   if (disable && !denyImplicit) {
     fail(
@@ -351,6 +460,52 @@ for (const { bucket, name } of [
       `${skill}: policy.allow_implicit_invocation: false without disable-model-invocation: true`,
     );
   }
+  // Only the promoted set has a slash-command list whose descriptions a human
+  // reads; non-promoted buckets ship nothing, so they are not policed here.
+  if (promotedIds.has(skillId) && disable && denyImplicit) {
+    const trigger = MODEL_TRIGGER_RE.exec(description);
+    if (trigger) {
+      fail(
+        `${skill}: user-invoked description contains model-trigger phrasing "${trigger[0]}" — a user-invoked skill's description is human-facing, so the trigger list is stripped (.agents/invocation.md)`,
+      );
+    }
+  }
+}
+
+// Cross-folder skill references are not dependencies (.agents/invocation.md):
+// skills reach each other as `/skill` prose invocations, because a relative
+// path stops meaning the same thing the moment a manifest flattens the skills
+// directory — which is exactly what the Codex payload does.
+const skillNames = new Set([
+  ...[...promoted.values()].map((skill) => skill.name),
+  ...nonPromotedNames,
+]);
+for (const { bucket, name } of promoted.values()) {
+  const source = read(join("skills", bucket, name, "SKILL.md"));
+  for (const match of source.matchAll(/\.\.\/([a-z0-9-]+)\//g)) {
+    if (skillNames.has(match[1])) {
+      fail(
+        `skills/${bucket}/${name}/SKILL.md links across skill folders (${match[0]}) — invoke the skill as \`/${match[1]}\` instead (.agents/invocation.md, "Dependencies between them")`,
+      );
+    }
+  }
+}
+
+// AGENTS.md is what non-Claude harnesses read for standing instructions. A
+// pointer with no resolvable target is worse than no file at all: it is read as
+// an agent's whole rulebook while carrying nothing, and this repo shipped
+// exactly that for a while (a nine-byte file whose content was the literal
+// string "CLAUDE.md").
+if (existsSync(join(repo, "AGENTS.md"))) {
+  const agents = read("AGENTS.md");
+  const targets = [...agents.matchAll(/\]\(([^)\s]+)\)/g)]
+    .map((match) => match[1])
+    .filter((target) => !/^[a-z][a-z0-9+.-]*:/i.test(target) && !target.startsWith("#"));
+  if (targets.length === 0 || !targets.some((t) => existsSync(join(repo, t)))) {
+    fail(
+      `AGENTS.md carries no link that resolves inside the repo — an agent reading only AGENTS.md gets no standing instructions (point it at CLAUDE.md, or carry the content)`,
+    );
+  }
 }
 
 if (errors.length) {
@@ -359,4 +514,6 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log(`skills lint OK (${promoted.size} promoted)`);
+console.log(
+  `skills lint OK (${promoted.size} promoted, ${forkOwned.size} fork-authored)`,
+);

@@ -1,0 +1,12 @@
+{
+  "$comment": "Single source of truth for the skills this fork owns end to end. Read by scripts/lint-skills.mjs to build the --diff-audit exemption, and referenced by docs/maintaining-fork.md and .github/PULL_REQUEST_TEMPLATE.md so the three cannot disagree about who is fork-owned. Add a skill here only when this fork authored it: upstream has no such skill, so its whole diff is the fork's reason to exist and there is no upstream rebase friction to budget. A skill the fork merely edits stays out, and its expression-layer changes still need a changeset.",
+  "skillIds": [
+    "engineering/execute-spec-in-fork",
+    "engineering/goal-crafter",
+    "engineering/harvest",
+    "engineering/project-standards",
+    "engineering/roundtable",
+    "engineering/spec-executor",
+    "engineering/to-goal"
+  ]
+}

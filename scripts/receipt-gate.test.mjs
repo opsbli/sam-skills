@@ -2,7 +2,9 @@
 // receipt-gate.test.mjs — synthetic-error coverage for the N1 receipt gate
 // validator (US-4). Covers AC1 (compliant pass-through), AC2–AC5 (each gate
 // intercepts its error class), AC6 (four synthetic error classes 4/4),
-// AC7 (zero third-party imports), AC8 (--check self-check).
+// AC7 (zero third-party imports), AC8 (--check self-check),
+// AC9 (a marker-shaped substring is not evidence), AC10 (labelled criteria do
+// not truncate the parse), AC11 (--checkout scopes Gate 6 to the named tree).
 // Zero-dependency: node:test only.
 //
 // Run: node --test scripts/receipt-gate.test.mjs
@@ -19,12 +21,18 @@ const script = join(dirname(fileURLToPath(import.meta.url)), "receipt-gate.mjs")
 const repo = join(dirname(script), "..");
 const node = process.execPath;
 
-function runOn(content, name = "receipt.md") {
+function runOn(content, name = "receipt.md", extraArgs = []) {
   const dir = mkdtempSync(join(tmpdir(), "receipt-gate-test-"));
   const file = join(dir, name);
   writeFileSync(file, content, "utf8");
   try {
-    return spawnSync(node, [script, "--receipt", file], { encoding: "utf8" });
+    // cwd pinned to the repo: Gate 6 compares against --checkout, or against the
+    // current directory when the flag is absent, so an unpinned cwd would make
+    // every gate-6 assertion depend on where the test happened to be launched.
+    return spawnSync(node, [script, "--receipt", file, ...extraArgs], {
+      cwd: repo,
+      encoding: "utf8",
+    });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -197,4 +205,74 @@ test("AC2: file-path mode unchanged — --receipt <path> still works", () => {
   const res = runOn(compliantReceipt(currentPorcelain()));
   assert.equal(res.status, 0, res.stdout + res.stderr);
   assert.match(res.stdout, /Result: 6\/6 — 归档：放行/);
+});
+
+// --- Gate 4 marker boundaries + Gate 6 scoping ------------------------------
+
+test("AC9: `bypass` is not a pass marker — a marker-shaped substring is not evidence", () => {
+  // Unbounded, MARKER_RE matched the `pass` inside `bypass` and the trailing
+  // words counted as evidence, so this entry satisfied Gate 4 while carrying
+  // nothing. The gate is the archive's trust anchor; a verdict-shaped substring
+  // is exactly what it must not accept.
+  const withSubstring = compliantReceipt(currentPorcelain()).replace(
+    /- Acceptance criteria: .*\n/,
+    "- Acceptance criteria: - implement bypass logic\n",
+  );
+  const rejected = runOn(withSubstring);
+  assert.equal(rejected.status, 1, rejected.stdout + rejected.stderr);
+  assert.match(rejected.stdout, /101004/);
+  assert.match(rejected.stdout, /Gate 4 .*FAIL/);
+
+  // Control: same sentence, only the marker changes — so the gate is reading the
+  // marker and its evidence, not merely rejecting unfamiliar wording.
+  const withMarker = compliantReceipt(currentPorcelain()).replace(
+    /- Acceptance criteria: .*\n/,
+    "- Acceptance criteria: - implement bypass logic - pass `node --test`\n",
+  );
+  const accepted = runOn(withMarker);
+  assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
+});
+
+test("AC10: criteria labelled `- AC1: …` do not truncate the receipt parse", () => {
+  // Criteria entries are shaped exactly like fields. Unanchored, `- AC1: …`
+  // started a field of its own, leaving Acceptance criteria empty and Gate 4
+  // rejecting a receipt that was in fact fully evidenced.
+  const receipt = compliantReceipt(currentPorcelain()).replace(
+    /- Acceptance criteria: .*\n/,
+    [
+      "- Acceptance criteria:",
+      "- AC1: gate CLI validates a compliant receipt - pass `node scripts/receipt-gate.mjs --receipt fixture.md` exits 0",
+      "- AC2: unevidenced criterion is intercepted - pass `node --test scripts/receipt-gate.test.mjs` all green",
+      "",
+    ].join("\n"),
+  );
+  const res = runOn(receipt);
+  assert.equal(res.status, 0, res.stdout + res.stderr);
+  assert.match(res.stdout, /Gate 4 .*PASS/);
+  assert.match(res.stdout, /Result: 6\/6 — 归档：放行/);
+});
+
+test("AC11: --checkout makes Gate 6 compare against the named worktree", () => {
+  // Gate 6 used to `git status` the validator's own repository. That is invisible
+  // while dogfooding and wrong everywhere else: the gate then reports on
+  // sam-skills rather than on the checkout the receipt describes.
+  const clean = mkdtempSync(join(tmpdir(), "receipt-gate-clean-"));
+  const dirty = mkdtempSync(join(tmpdir(), "receipt-gate-dirty-"));
+  try {
+    for (const dir of [clean, dirty]) execFileSync("git", ["init", "--quiet"], { cwd: dir });
+    writeFileSync(join(dirty, "phantom-drift-file.ts"), "// drift\n");
+
+    const receipt = compliantReceipt([]); // reports an empty worktree
+
+    const cleanRes = runOn(receipt, "receipt.md", ["--checkout", clean]);
+    assert.equal(cleanRes.status, 0, cleanRes.stdout + cleanRes.stderr);
+
+    const dirtyRes = runOn(receipt, "receipt.md", ["--checkout", dirty]);
+    assert.equal(dirtyRes.status, 1, dirtyRes.stdout + dirtyRes.stderr);
+    assert.match(dirtyRes.stdout, /101006/);
+    assert.match(dirtyRes.stdout, /phantom-drift-file\.ts/);
+  } finally {
+    rmSync(clean, { recursive: true, force: true });
+    rmSync(dirty, { recursive: true, force: true });
+  }
 });

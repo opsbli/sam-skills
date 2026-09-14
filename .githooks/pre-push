@@ -3,12 +3,23 @@
 #   git config core.hooksPath .githooks
 set -euo pipefail
 
-echo "pre-push: running fork guard (lint:skills, check:router, check-plugin-version, codex payload)" >&2
+echo "pre-push: running every read-only repo guard (npm run verify)" >&2
+npm run verify
 
-npm run lint:skills
-npm run check:router
-npm run check-plugin-version
-node scripts/build-codex-plugin.mjs --check
+# The inherited-skill drift audit needs a fetched upstream/main and full
+# history, so it is best-effort here and enforced in CI (fork-guard fetches
+# upstream). A clone that never fetched upstream produces a loud NOT VERIFIED
+# line rather than a silent pass; a run that starts but cannot complete is
+# reported and left to CI, because the audit is warn-only during its rollout.
+if git rev-parse --verify --quiet 'upstream/main^{commit}' >/dev/null 2>&1; then
+  echo "pre-push: running inherited-skill drift audit (npm run verify:upstream)" >&2
+  if ! npm run verify:upstream; then
+    echo "pre-push: WARNING — drift audit did not complete (see output above). CI enforces it." >&2
+  fi
+else
+  echo "pre-push: NOT VERIFIED — inherited-skill drift audit skipped: upstream/main is not fetched in this clone." >&2
+  echo "pre-push:   git fetch upstream main && npm run verify:upstream" >&2
+fi
 
 if command -v claude >/dev/null 2>&1; then
   claude plugin validate . --strict

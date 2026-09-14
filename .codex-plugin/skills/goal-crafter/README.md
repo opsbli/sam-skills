@@ -1,3 +1,5 @@
+<!-- DISPOSITION (N3, 2026-09-14): This README is a legacy promo page. It is NOT the executable contract and its install instructions point at a different upstream repository (awesome-skills/goal-crafter). The only authoritative source for goal-crafter behavior in this fork is SKILL.md (dual-mode: standalone / compiled-handoff). Do not sync behavior claims from this page. -->
+
 # 🎯 Goal Crafter
 
 <p align="center">

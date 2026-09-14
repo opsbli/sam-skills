@@ -10,7 +10,11 @@
   "license": "MIT",
   "scripts": {
     "changeset": "changeset",
-    "version": "changeset version && node scripts/sync-plugin-version.mjs",
+    "version": "changeset version && node scripts/sync-plugin-version.mjs && node scripts/build-codex-plugin.mjs",
+    "verify": "node scripts/verify.mjs",
+    "verify:all": "node scripts/verify.mjs --with-tests",
+    "verify:list": "node scripts/verify.mjs --list",
+    "verify:upstream": "node scripts/lint-skills.mjs --diff-audit upstream/main",
     "check-plugin-version": "node scripts/sync-plugin-version.mjs --check",
     "lint:skills": "node scripts/lint-skills.mjs",
     "sync:local": "bash scripts/sync-local-skills.sh",
@@ -19,7 +23,9 @@
     "receipt:gate": "node scripts/receipt-gate.mjs",
     "test:receipt-gate": "node --test scripts/receipt-gate.test.mjs",
     "gate:coupling": "node scripts/test-coupling-gate.mjs",
-    "gate:slice": "node scripts/tdd-slice-gate.mjs"
+    "gate:slice": "node scripts/tdd-slice-gate.mjs",
+    "gate:append-only": "node scripts/append-only-gate.mjs",
+    "test:mailbox-cycle": "node --test scripts/fork-loop-mcp/test/mailbox-cycle.test.mjs"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",

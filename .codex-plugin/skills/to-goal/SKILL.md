@@ -1,6 +1,6 @@
 ---
 name: to-goal
-description: Turn an approved spec, agent-ready ticket, tracker frontier, or partially implemented ticket into a verifiable execution goal without re-interviewing the user. Use after to-tickets or triage, before starting a fresh implementation session; use --all only for an explicitly requested cross-ticket goal.
+description: Compile an approved spec, agent-ready ticket, tracker frontier, or partially implemented ticket into a verifiable execution goal for a fresh session.
 disable-model-invocation: true
 ---
 
@@ -10,7 +10,7 @@ Compile existing planning and repository evidence into an execution goal. Do not
 
 ## Source of truth
 
-Read `../goal-crafter/SKILL.md` only for **compiled-handoff mode**, Phase 2 harness formats, Phase 3's four self-checks, and Special Rules (never re-interview; one verifiable condition per checkbox). Skip Phase 1 and Examples. This skill owns context gathering, frontier selection, readiness checks, and execution handoff. Do not reopen decisions already made by `to-spec`, `to-tickets`, or `triage`.
+Run `/goal-crafter` in **compiled-handoff mode** and take from it the harness output format, the four self-checks, and its special rules — never re-interview; one verifiable condition per checkbox. Its standalone interview and its examples do not apply here. This skill owns context gathering, frontier selection, readiness checks, and execution handoff. Do not reopen decisions already made by `to-spec`, `to-tickets`, or `triage`.
 
 ## Accepted inputs
 
@@ -40,7 +40,7 @@ Before drafting:
 6. Discover validation commands from the repository's own scripts, CI, documentation, and existing tests.
 7. Preserve user-established permissions and workspace boundaries from the source context.
 
-Keep this work read-only. Do not create status artifacts merely to build the goal.
+Keep this work read-only. Do not create status artifacts merely to build the goal. The compiled goal is returned **inline in your reply** as a paste block — never written to a file (including `.scratch/` or the tracker), even when the task's wording ("compile", "write") suggests an artifact.
 
 ## Select scope
 
@@ -89,7 +89,7 @@ Required propositions — tick every item before drafting. If any of these is un
 - [ ] Every acceptance criterion classified: evidenced complete / demonstrably incomplete / unverified.
 - [ ] Validation commands discovered from the repository's scripts, CI, documentation, or existing tests.
 - [ ] Permissions and workspace boundaries from the source context preserved.
-- [ ] Every completion criterion independently decidable (`goal-crafter` Phase 3: no "looks good").
+- [ ] Every completion criterion independently decidable (`/goal-crafter`'s self-check: no "looks good").
 
 </readiness-checklist>
 
@@ -100,7 +100,7 @@ Conditional prohibitions — satisfied by default on the single-ticket path. Do 
 
 ## Goal template
 
-Required fields must be filled. Conditional fields appear only when they apply. Use the harness envelope from `goal-crafter` Phase 2. When the harness is not explicit, infer it from the invocation context; if that is impossible, emit this generic block so it can be pasted into a fresh coding-agent session. Current state, Execution order, and the prefilled constraints stay required even when the harness names fewer sections.
+Required fields must be filled. Conditional fields appear only when they apply. Use the harness envelope returned by the `/goal-crafter` invocation. When the harness is not explicit, infer it from the invocation context; if that is impossible, emit this generic block so it can be pasted into a fresh coding-agent session. Current state, Execution order, and the prefilled constraints stay required even when the harness names fewer sections.
 
 Unless the source context explicitly overrides a default constraint, keep that line verbatim. When it does override, rewrite that line and name the source.
 
