@@ -371,6 +371,27 @@ git fetch --refetch --no-tags --force upstream main
 
 ---
 
+### 第十一轮：Windows 与 CI 平台一致性（🟠 #22）+ 修掉我自己引入的一处回归
+
+**先说回归——它是"把要写进 CI 的命令先在本机跑一遍"逼出来的：**
+
+`lint-skills.mjs` 把**整份 changeset 文本**当作继承技能的豁免凭据（`:90-92` 读全部 `.changeset/*.md`，`:131` 做 `changesetText.includes(name)`）。我上一轮把 15 个 per-skill 键收敛成单个 `sam-skills`，**等于把那 15 个技能名从文件里删掉了** → 6 个技能开始报 `no changeset mentioning …`。
+
+**上一轮为什么没发现**：`verify:upstream` **刻意不在** `verify:all` 里（它需要已抓取的上游 ref，放进默认门禁会让每个新 clone 失败），所以我只跑 `verify:all` 时看不见它。这次因为要预跑 CI 命令才撞上。
+
+修法：技能名移入 `expression-layer-style-pass.md` 的**正文**（机制能看见的地方），并写明为什么必须留在正文。
+
+| 项目 | 状态 | 改动 | 验证证据 |
+|---|---|---|---|
+| **豁免被键名收敛删掉**（自引入） | ✅ | 15 个技能名写入 changeset 正文 | `npm run verify:upstream` → **`diff-audit OK`，0 warning**（此前 6 条） |
+| **CI 只有 Linux**（🟠 #22） | ✅ | 新增 `guard-windows` job：与 Linux 跑**同一组** `verify:all` + `verify:upstream`，另用 `bash -n` 解析全部 `.sh` | YAML 解析通过（`jobs=guard,guard-windows`；9 步 / 7 步）；本机预跑 job 内每条命令：`verify:all` **14/14**、`verify:upstream` **OK**、**5 个 `.sh` 全部 `bash -n` 通过** |
+
+**为什么值得多花一个 runner**：fork-loop 明确面向 win32，而**所有护栏此前只在 `ubuntu-latest` 上跑过**——`taskkill /T /F` 树杀、无 shell 的 `spawn` 解析裸 `node`、mailbox 与 diff-audit 里的反斜杠路径，这些 **win32 专有分支零覆盖**。贡献者也在 Windows 上工作，而"本地门禁红、CI 绿"正是这个 job 要消除的失败。
+
+**诚实边界（必须写明）**：我验证的是**命令本身**（在本机 Git Bash / PowerShell 上逐条跑通），**不是 GitHub 的 runner 镜像**。`.sh` 的**执行**仍是 Linux-only（`sync-local-skills.sh` 需要 `rsync`，Windows 镜像不带）。另外本机沙箱会把 Git Bash 内层的 `bash` 解析到 WSL stub 并被安全策略拦下——**那是本机策略，不是 runner 行为**（GitHub 的 `shell: bash` 显式指向 Git Bash）。
+
+---
+
 ## 🏗️ 架构影响评估（Archi）
 
 ### 一个根因，六处症状：**「同一条规则被复写多份，且防漂移不接线」**
