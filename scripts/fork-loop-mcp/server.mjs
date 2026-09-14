@@ -16,7 +16,7 @@
  */
 
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -26,7 +26,12 @@ import readline from 'node:readline';
 const PROTOCOL_VERSION = '2024-11-05';
 const SERVER_INFO = { name: 'fork-loop-mcp', version: '1.0.0' };
 const RECEIPT_MARKER = 'SPEC EXECUTION RECEIPT';
-const RECEIPT_SCHEMA_LINE = /Schema:\s*spec-executor-receipt\/v1/i;
+// The mailbox accepts only a receipt carrying the contract's Schema first
+// field. This constant named v1 while the launch prompt wrote v2 — and nothing
+// read it, so any old-schema block was stored as a valid receipt. Now it is
+// enforced: an unversioned or stale block is not a receipt, and spawn_execution
+// reports receipt_extracted:false with the raw tail for the planner to inspect.
+const RECEIPT_SCHEMA_LINE = /^\s*-\s*Schema:\s*spec-executor-receipt\/v2\s*$/im;
 
 /** Resolve the CLI entry: env override wins, else the desktop-install default. */
 function resolveCliCommand(env) {
@@ -61,10 +66,44 @@ function writeJson(file, value) {
 
 /**
  * Machine lock for the single-active-execution-thread guard.
- * mkdir is atomic on all platforms; a stale lock older than 6h is broken.
+ *
+ * mkdir is atomic on all platforms, so the directory *is* the mutex. Two ways
+ * that mutex used to leak are closed here:
+ *
+ *  - `task.json` is written *after* the mkdir lands, so a competing acquire can
+ *    observe a lock directory with no holder yet. Reading that as
+ *    `startedAt: 0` made a brand-new lock look infinitely old, and the loser
+ *    broke it and took it — two executions on one checkout. A missing holder is
+ *    no longer read as a fabricated timestamp: it falls back to the directory's
+ *    own mtime and needs a much longer, deliberately conservative grace. A crash
+ *    between mkdir and write is the only way to produce that state, so the
+ *    longer grace costs a crash recovery 15 minutes and buys back the mutex.
+ *  - release was unconditional, so a late ack/fail belonging to an
+ *    already-settled task could drop the *current* execution's lock. Release is
+ *    now scoped to the task that actually holds it.
  */
+const STALE_LOCK_MS = 6 * 60 * 60 * 1000; // holder recorded, older than 6h
+const ORPHAN_LOCK_MS = 15 * 60 * 1000; // no holder recorded, dir untouched 15m
+
 function lockFile(checkout) {
   return path.join(stateRoot(checkout), `exec-${safeName(checkout)}.lock`);
+}
+
+/** The holder recorded inside a lock directory, or null when unreadable. */
+function lockHolder(file) {
+  const holder = readJson(path.join(file, 'task.json'), null);
+  return holder && typeof holder === 'object' ? holder : null;
+}
+
+/** Age of a lock in ms: the holder's clock when recorded, else the directory's. */
+function lockAge(file) {
+  const holder = lockHolder(file);
+  if (holder && Number(holder.startedAt) > 0) return Date.now() - Number(holder.startedAt);
+  try {
+    return Date.now() - fs.statSync(file).mtimeMs;
+  } catch {
+    return 0;
+  }
 }
 
 function acquireLock(checkout, task) {
@@ -73,22 +112,39 @@ function acquireLock(checkout, task) {
   try {
     fs.mkdirSync(file);
   } catch {
-    const stale = Date.now() - (readJson(path.join(file, 'task.json'), { startedAt: 0 }).startedAt || 0);
-    if (stale > 6 * 60 * 60 * 1000) {
+    const holder = lockHolder(file);
+    const limit = holder ? STALE_LOCK_MS : ORPHAN_LOCK_MS;
+    if (lockAge(file) > limit) {
       fs.rmSync(file, { recursive: true, force: true });
       try {
         fs.mkdirSync(file);
       } catch {
-        return { ok: false, holder: readJson(path.join(file, 'task.json'), {}) };
+        return { ok: false, holder: lockHolder(file) || {} };
       }
     } else {
-      return { ok: false, holder: readJson(path.join(file, 'task.json'), {}) };
+      return { ok: false, holder: holder || { note: 'lock present but no holder recorded' } };
     }
   }
   writeJson(path.join(file, 'task.json'), task);
   return { ok: true };
 }
 
+/** Drop the lock only when `taskId` is the execution that holds it. */
+function releaseLockIfHeldBy(checkout, taskId) {
+  const file = lockFile(checkout);
+  if (!fs.existsSync(file)) return { released: false, reason: 'no lock held' };
+  const holder = lockHolder(file);
+  if (!holder) {
+    return { released: false, reason: 'lock has no recorded holder; refusing to drop it' };
+  }
+  if (holder.id !== taskId) {
+    return { released: false, reason: `lock is held by ${holder.id}, not ${taskId}` };
+  }
+  fs.rmSync(file, { recursive: true, force: true });
+  return { released: true };
+}
+
+/** Unconditional drop — reachable only through the explicit recovery tool. */
 function releaseLock(checkout) {
   fs.rmSync(lockFile(checkout), { recursive: true, force: true });
 }
@@ -105,11 +161,21 @@ function saveMailbox(checkout, box) {
   writeJson(mailboxFile(checkout), box);
 }
 
-/** Pull the receipt block out of runner output; tolerate trailing chatter. */
+/**
+ * Pull the receipt block out of runner output; tolerate trailing chatter.
+ *
+ * Uses the LAST occurrence, not the first. The launch prompt embeds a receipt
+ * template under the same heading, so a runner that echoes its prompt — a status
+ * line, an error dump, a "here is my instruction" preamble — would otherwise
+ * have its template extracted instead of its result. The template is a valid
+ * receipt, so the gates would then reject real work for a reason the operator
+ * cannot see from the mailbox.
+ */
 function extractReceipt(text) {
-  const idx = text.indexOf(RECEIPT_MARKER);
+  const idx = text.lastIndexOf(RECEIPT_MARKER);
   if (idx < 0) return null;
-  return text.slice(idx).trim();
+  const block = text.slice(idx).trim();
+  return RECEIPT_SCHEMA_LINE.test(block) ? block : null;
 }
 
 function extractSessionId(text) {
@@ -123,7 +189,41 @@ function extractSessionId(text) {
  * Windows shells truncate multi-line argv at the first newline, but a file
  * reference survives. Tested against 0.16.5 on win32.
  */
-function runHeadless(checkout, prompt, maxTurns, taskId) {
+
+// The env overrides exist so the cap is testable without waiting 90 minutes.
+const RUNNER_TIMEOUT_MS = Number(process.env.FORK_LOOP_RUNNER_TIMEOUT_MS) || 90 * 60 * 1000;
+const KILL_GRACE_MS = Number(process.env.FORK_LOOP_KILL_GRACE_MS) || 30 * 1000;
+
+/**
+ * Kill the runner and everything it spawned.
+ *
+ * The runner's own children inherit its stdout pipe. If they outlive it, `close`
+ * never fires and `spawn_execution` never resolves — so the checkout stays
+ * locked and the planning session waits on a call that will not return.
+ * `taskkill /T` takes the whole tree on win32; elsewhere SIGKILL cannot be
+ * ignored the way SIGTERM can.
+ */
+function killRunnerTree(child) {
+  if (process.platform === 'win32' && child.pid) {
+    try {
+      spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+      return 'taskkill /T /F';
+    } catch {
+      /* fall through to the signal path */
+    }
+  }
+  try {
+    child.kill('SIGKILL');
+    return 'SIGKILL';
+  } catch {
+    return 'no signal delivered';
+  }
+}
+
+function runHeadless(checkout, prompt, taskId) {
   const cmd = resolveCliCommand(process.env);
   const [bin, ...baseArgs] = cmd.split(/\s+/);
   const promptFile = path.join(stateRoot(checkout), `prompt-${taskId || Date.now()}.md`);
@@ -145,12 +245,30 @@ function runHeadless(checkout, prompt, maxTurns, taskId) {
   return new Promise((resolve) => {
     let out = '';
     let err = '';
+    let settled = false;
+    let timer = null;
+    let killTimer = null;
+    const finish = (code, extra) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      if (killTimer) clearTimeout(killTimer);
+      resolve({ code, out, err: extra ? `${err}\n${extra}` : err });
+    };
     const child = spawn(bin, args, {
       cwd: checkout,
       env: process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
-      shell: process.platform === 'win32',
+      // Never route the runner through a shell. `checkout` and the prompt-file
+      // path reach argv verbatim, so shell:true on win32 would hand them to
+      // cmd.exe and a perfectly legal directory name containing `&` or `%`
+      // would be parsed as syntax — the A03 command injection that
+      // delivery/安全设计.md claims is already mitigated. libuv resolves a bare
+      // `node` to node.exe on PATH without a shell, so nothing here needs one.
+      // The one case that would: FORK_LOOP_ZCODE_CMD pointing at a .cmd/.bat
+      // wrapper, which must then be wrapped explicitly.
+      shell: false,
     });
     child.stdout.on('data', (d) => {
       out += d;
@@ -158,30 +276,67 @@ function runHeadless(checkout, prompt, maxTurns, taskId) {
     child.stderr.on('data', (d) => {
       err += d;
     });
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       try {
         child.kill();
       } catch {}
-    }, 90 * 60 * 1000); // hard cap: 90 minutes
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      resolve({ code, out, err });
-    });
-    child.on('error', (e) => {
-      clearTimeout(timer);
-      resolve({ code: -1, out, err: `${err}\n${e.message}` });
-    });
+      // The polite kill is only the first step. A runner that ignores it — or
+      // one whose children keep the pipe open — never emits `close`, so this
+      // promise (and the checkout lock it holds) would hang forever. Escalate to
+      // a tree kill, then settle anyway: the mailbox records a failed run and
+      // the lock becomes releasable instead of leaking until the stale sweep.
+      killTimer = setTimeout(() => {
+        const how = killRunnerTree(child);
+        finish(
+          -1,
+          `runner exceeded ${Math.round(RUNNER_TIMEOUT_MS / 60000)}min and did not close after ` +
+            `${Math.round(KILL_GRACE_MS / 1000)}s; forced kill via ${how}`,
+        );
+      }, KILL_GRACE_MS);
+    }, RUNNER_TIMEOUT_MS); // hard cap on one execution
+    child.on('close', (code) => finish(code));
+    child.on('error', (e) => finish(-1, e.message));
   });
 }
 
 let taskSeq = 0;
 
-/** spawn_execution — the fork_thread replacement. */
-async function spawnExecution(args) {
-  const checkout = args.checkout;
-  if (!checkout || !fs.existsSync(checkout)) {
+/**
+ * Resolve and validate the checkout the runner will be spawned against.
+ *
+ * The path reaches the runner's argv verbatim — as `--cwd <checkout>` and inside
+ * the prompt-file path — so it is canonicalised here and rejected unless it is an
+ * existing directory. Canonicalising keeps the lock key, the mailbox and the
+ * runner's working directory describing the same tree; rejecting non-directories
+ * keeps a stray path from aiming the runner at the wrong worktree.
+ */
+function normalizeCheckout(input) {
+  if (!input || typeof input !== 'string') {
     return { ok: false, error: 'checkout path missing or does not exist' };
   }
+  let resolved;
+  try {
+    resolved = fs.realpathSync(input);
+  } catch {
+    return { ok: false, error: 'checkout path missing or does not exist' };
+  }
+  let stat;
+  try {
+    stat = fs.statSync(resolved);
+  } catch {
+    return { ok: false, error: 'checkout path missing or does not exist' };
+  }
+  if (!stat.isDirectory()) {
+    return { ok: false, error: `checkout is not a directory: ${resolved}` };
+  }
+  return { ok: true, checkout: resolved };
+}
+
+/** spawn_execution — the fork_thread replacement. */
+async function spawnExecution(args) {
+  const check = normalizeCheckout(args.checkout);
+  if (!check.ok) return check;
+  const checkout = check.checkout;
   if (!args.spec_ready || !String(args.spec_ready).includes('SPEC READY')) {
     return { ok: false, error: 'spec_ready must contain the complete SPEC READY block' };
   }
@@ -215,7 +370,7 @@ async function spawnExecution(args) {
     'SPEC EXECUTION RECEIPT',
     '',
     '- Schema: spec-executor-receipt/v2',
-    '- Conclusion: completed / partially completed / blocked',
+    '- Conclusion: <exactly one single token: completed | blocked | failed — report partial work as blocked, with the remainder under Risks and remaining work>',
     '- Spec source: <path>',
     '- Review fixed point: <baseline commit>',
     '- Acceptance criteria: <each criterion with pass/fail and real evidence (commands + output)>',
@@ -236,7 +391,7 @@ async function spawnExecution(args) {
     '',
     String(args.spec_ready),
   ].join('\n');
-  const result = await runHeadless(checkout, prompt, args.max_turns, task.id);
+  const result = await runHeadless(checkout, prompt, task.id);
   const receipt = extractReceipt(result.out) || extractReceipt(result.err);
   const box = loadMailbox(checkout);
   const entry = {
@@ -297,8 +452,16 @@ function settle(args, state) {
   entry.state = state;
   entry.settledAt = Date.now();
   saveMailbox(checkout, box);
-  releaseLock(checkout);
-  return { ok: true, task_id: entry.task_id, state };
+  // Scoped release: a late ack/fail for a task that is no longer the lock
+  // holder must not drop the lock of the execution running right now.
+  const lock = releaseLockIfHeldBy(checkout, entry.task_id);
+  return {
+    ok: true,
+    task_id: entry.task_id,
+    state,
+    lock_released: lock.released,
+    ...(lock.released ? {} : { lock_note: lock.reason }),
+  };
 }
 
 const TOOLS = {
@@ -313,7 +476,11 @@ const TOOLS = {
         spec_ready: { type: 'string', description: 'The complete SPEC READY block (launch command)' },
         topic: { type: 'string', description: 'Short non-sensitive topic for the execution' },
         planner_session: { type: 'string', description: 'sess_… id of the planning session' },
-        max_turns: { type: 'number', description: 'Optional --max-turns cap for the headless runner' },
+        // No max_turns. It was advertised here but never reached argv, and it
+        // could not have worked: the runner's strict parser aborts on
+        // --max-turns with "Unknown option" (see runHeadless). An advertised
+        // knob that silently does nothing is worse than no knob. A caller that
+        // still sends the property is ignored rather than rejected.
       },
     },
   },
@@ -331,7 +498,7 @@ const TOOLS = {
   },
   ack_receipt: {
     description:
-      'Mark a delivered receipt accepted (six gates passed, Docs delta settled). Releases the checkout execution lock.',
+      'Mark a delivered receipt accepted (six gates passed, Docs delta settled). Releases the checkout execution lock if this task_id is the one holding it.',
     inputSchema: {
       type: 'object',
       required: ['checkout', 'task_id'],
@@ -340,7 +507,7 @@ const TOOLS = {
   },
   fail_receipt: {
     description:
-      'Mark a delivered receipt rejected (validation failure). Releases the checkout execution lock.',
+      'Mark a delivered receipt rejected (validation failure). Releases the checkout execution lock if this task_id is the one holding it.',
     inputSchema: {
       type: 'object',
       required: ['checkout', 'task_id'],
@@ -349,11 +516,18 @@ const TOOLS = {
   },
   release_execution: {
     description:
-      'Recovery path: drop the checkout execution lock without settling a receipt. Only when a runner is confirmed dead and no receipt will arrive.',
+      'Recovery path: drop the checkout execution lock without settling a receipt, for when a runner is confirmed dead and no receipt will arrive. Must name the task_id expected to hold the lock, or pass force:true to drop a lock whose holder cannot be identified. Anything else is refused, so a stale recovery call cannot release a live execution.',
     inputSchema: {
       type: 'object',
       required: ['checkout'],
-      properties: { checkout: { type: 'string' } },
+      properties: {
+        checkout: { type: 'string' },
+        task_id: { type: 'string', description: 'Release only if this task holds the lock' },
+        force: {
+          type: 'boolean',
+          description: 'Drop the lock even when its holder cannot be identified (recovery only)',
+        },
+      },
     },
   },
 };
@@ -368,9 +542,28 @@ async function callTool(name, args) {
       return settle(args, 'done');
     case 'fail_receipt':
       return settle(args, 'failed');
-    case 'release_execution':
-      releaseLock(args.checkout);
-      return { ok: true, released: true };
+    case 'release_execution': {
+      const checkout = args.checkout;
+      const file = lockFile(checkout);
+      if (!fs.existsSync(file)) return { ok: true, released: false, note: 'no lock held' };
+      const holder = lockHolder(file);
+      if (args.task_id && holder && holder.id === args.task_id) {
+        releaseLock(checkout);
+        return { ok: true, released: true, holder: holder.id };
+      }
+      if (args.force === true) {
+        releaseLock(checkout);
+        return { ok: true, released: true, forced: true, holder: holder ? holder.id : null };
+      }
+      return {
+        ok: false,
+        released: false,
+        holder: holder ? holder.id : null,
+        error: holder
+          ? `lock is held by ${holder.id}; pass task_id "${holder.id}", or force:true to drop it anyway`
+          : 'lock has no recorded holder; pass force:true to drop it',
+      };
+    }
     default:
       throw new Error(`unknown tool: ${name}`);
   }
