@@ -311,6 +311,34 @@ error: Could not read 6654f6b60cd9d5be8b54c6fafe44346dabeb3b76
 
 ---
 
+#### 第八轮：对象库**已原地修复**（原"需人工决策"作废）
+
+网络恢复后，我找到了真正的解法——而且它比我列的 A/B/C **都简单**：
+
+```bash
+git fetch --refetch --no-tags --force upstream main
+```
+
+`--refetch` **不按已有 ref 协商，整包重新下载**。而"协商"正是问题的藏身之处：git 看到自己已经有 tip，就报 "everything up to date"，**永远不会去要缺失的祖先**。这一条命令就把 `6654f6b` 找回来了。
+
+| 指标 | 修复前 | 现在 |
+|---|---|---|
+| `6654f6b`（上游基线） | 对象缺失 | ✅ **commit** |
+| `git rev-list --count HEAD` | ❌ EXIT=128 | ✅ **502** |
+| `git log`（完整历史） | 中断 | ✅ **502** 提交 |
+| **`git merge-base HEAD upstream/main`** | ❌ EXIT=255 | ✅ **`6654f6b`** → **`sync-upstream.sh` 恢复可用** |
+| `git log --all` / `rev-list --all` | ❌ 中断 | ✅ **516**（经 `git replace --graft`） |
+| `git fetch`（origin + upstream） | 刷 fatal、退出失败 | ✅ **完全干净，EXIT=0** |
+| `git fsck` pointer / reflog / traverse | 7 / 17 / 有 | **0 / 0 / 0** |
+
+**执行序列（无历史手术、无 re-clone）**：① 删除 7 个悬空 tag → ② `git fetch --refetch` 取回缺失基线 → ③ 外科式过滤 `.git/logs/*` 里指向已消失对象的 reflog 行（保留其余） → ④ `git replace --graft 6348c2ef` 恢复全库遍历。
+
+**唯一刻意保留的残留**：1 个 broken link。提交 `6348c2ef`（"Republish home: tt-a1i/matt-skills-with-to-goal -> opsbli/sam-skills"）的父 `be553a9d` 已从所有远端消失，而**文档记录要保留的 re-graft 前备份分支 `backup/pre-graft-20260904-105531` 正指向它**。该分支的价值高于一次干净的 `fsck`，因此保留它，并定向关闭**无法完成的那两项维护任务**（`maintenance.auto=false`、`gc.auto=0`、`fetch.writeCommitGraph=false`，均可逆）。
+
+**结论：A/B/C 三个方案全部作废——原地就能修好。** 完整 runbook（症状 → 诊断顺序 → `--refetch` → reflog 处理 → graft → 何时该关维护）已写入 [`docs/maintaining-fork.md`](../docs/maintaining-fork.md)。
+
+---
+
 ## 🏗️ 架构影响评估（Archi）
 
 ### 一个根因，六处症状：**「同一条规则被复写多份，且防漂移不接线」**
@@ -408,7 +436,7 @@ ADR 0003/0005 的架构判断是**克制且正确的**——"一个真 adapter +
 - **无法从仓库判定**：GitHub 分支保护是否强制 fork-guard → 若无，"CI 红"甚至不阻塞合并，优先级需重新评估。
 - **未验证**：`claude plugin validate . --strict` 当前是否通过；`.changeset/*.md` 是否真被 `--diff-audit` 命中。
 - **架构优点不可忽视**：本次审查发现密度高，但仓库的**契约文档化、门禁设计范式（refuse-not-degrade）、上游同步护栏、诚实的方法论边界**均属成熟做法——问题集中在"fork 自建基建没接线到强制流程"，而非设计能力不足。
-- **仓库对象库仍不完整（已止血，未修复）**：7 个悬空 tag ref 已清除、自动 gc/维护已在本仓关闭，**`git fetch` 已恢复干净**；但祖先链断裂仍在——`6654f6b` 已不在上游可达历史里，**无法补拉**。`git rev-list` / `git fsck` 仍报错，**`git merge-base HEAD upstream/main` 返回 EXIT=255 → `sync-upstream.sh` 在本 clone 上不可能工作**。三条修复路径见「第五轮」对照表，需人工选择（本轮未擅自执行）。
+- **仓库对象库：已原地修复**（见「第八轮」）。`git fetch --refetch` 取回了缺失的上游基线 `6654f6b`；`git merge-base HEAD upstream/main` 恢复、**`sync-upstream.sh` 重新可用**、`git fetch` 完全干净、`fsck` 的 pointer/reflog/traverse 错误全部归零。**唯一刻意保留的残留**：1 个 broken link——它由文档记录要保留的 re-graft 前备份分支 `backup/pre-graft-20260904-105531` 钉住，代价是定向关闭两项无法完成的维护任务（可逆，见 runbook 第 7 步）。
 - **评分口径**：本报告不给出单一百分制分数；严重度分布与 Go/No-Go 结论即评级依据。
 
 ---

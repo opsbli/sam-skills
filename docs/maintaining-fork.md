@@ -58,7 +58,7 @@ git fetch upstream <missing-sha>              # can the object still be obtained
 
 1. **Dangling tag refs first.** A tag pointing at a missing object makes the auto-repack fail, and a failing repack makes *the whole `git fetch` fail* — so one dead tag can look like a network problem. Delete the dangling tags (`git tag -d <name>`) before anything else; that alone took `invalid sha1 pointer` errors from 7 to 0 in this repository.
 2. **Then decide whether the missing object is obtainable.** It is not if the fetch refuses it (`did not send all necessary objects`). Note that git will *not* re-fetch ancestors of a commit it already has: if the local repo has the tip but not some parent, a plain `git fetch` reports "everything up to date" and downloads nothing.
-3. **Stop the bleeding while the store is broken.** The repack is what turns a broken store into failed fetches, so turn it off locally — reversible, `.git/config` only:
+3. **Stop the bleeding while you diagnose.** The repack is what turns a broken store into failed fetches, so turn it off locally — reversible, `.git/config` only:
 
    ```bash
    git config maintenance.auto false
@@ -69,13 +69,32 @@ git fetch upstream <missing-sha>              # can the object still be obtained
 
    With that, `git fetch` returns to a clean exit. Local work — `status`, `commit`, short `log`, every test suite — is unaffected throughout.
 
-4. **Repair, once the tree is clean and the network is up.** Rewriting history with uncommitted work in the tree sweeps that work into the rewrite, so commit first. Then either:
-   - **Re-anchor** the fork's commits onto the current `upstream/main` (`git commit-tree` re-rooting, the same technique recorded by the `fork-reanchored-*` / `recovery-onto-*` tags). This restores `merge-base` and makes `sync:upstream` usable again.
-   - **Or re-clone** from `origin` and re-apply the working tree, if `origin` is reachable and intact.
+4. **Try `git fetch --refetch` before anything invasive.** This is the fix that actually worked here, and it is the one to reach for first:
 
-   A shallow boundary (`git fetch --depth=1`, or a manual `.git/shallow` entry) silences the errors without restoring sync: `merge-base` then returns "no common ancestor" instead of crashing, which is honest but still leaves `sync:upstream` unavailable.
+   ```bash
+   git fetch --refetch --no-tags --force upstream main
+   ```
 
-> **Note for this clone (2026-09-14):** both `origin` and `upstream` were unreachable at diagnosis time (`CONNECT tunnel failed, response 502`), so the repair is currently blocked on network access, not on technique. `sync:upstream` will fail here until the ancestry is restored — its `git merge-base` step cannot resolve.
+   `--refetch` re-downloads the full pack instead of negotiating against the refs the clone already has — and that negotiation is precisely what hides the problem. Git sees that it already has the tip, reports "everything up to date", and never asks for the missing *ancestor*. In this repository the single command above restored `6654f6b`, after which `git rev-list --count HEAD` (502 commits), `git log` over the full history, and `git merge-base HEAD upstream/main` all worked again — no history surgery and no re-clone.
+
+5. **Clear invalid reflog entries if maintenance still complains.** A reflog line can outlive its object: a branch-creation entry records the commit the branch was born at. `git fsck` names them. Either expire the reflog wholesale (`git reflog expire --expire=now --all`) or filter just the offending lines out of `.git/logs/HEAD` and `.git/logs/refs/heads/*`, which keeps every other entry intact.
+
+6. **If a broken link survives inside an object you intend to keep, graft it.** A commit whose parent is gone blocks whole-repo walks (`git log --all`, `git rev-list --all`). `git replace --graft <sha>` makes it a traversal root without touching a single ref or rewriting history, and `git replace -d <sha>` undoes it. Know the limit: traversal honours the replacement, but `commit-graph` and `geometric-repack` do not — they must describe the real object graph.
+
+7. **When the orphan cannot be removed, stop running the tasks that cannot finish.** If the broken commit is pinned by something you want to keep, the honest answer is to keep it and turn the repack off:
+
+   ```bash
+   git config maintenance.auto false
+   git config gc.auto 0
+   git config fetch.writeCommitGraph false
+   # revert with: git config --unset maintenance.auto && git config --unset gc.auto && git config --unset fetch.writeCommitGraph
+   ```
+
+   `git fetch` then exits clean, and `git fsck` still reports the one broken link — which is correct, because the object really is gone.
+
+   Re-anchoring the fork (`git commit-tree` re-rooting, the technique the `fork-reanchored-*` / `recovery-onto-*` tags record) or re-cloning from `origin` remain the heavier options if you want a store with no broken links at all.
+
+> **This clone (2026-09-14).** Recovered in place. Deleted 7 dangling tags; `git fetch --refetch` restored the missing upstream baseline `6654f6b`; invalid reflog lines were filtered out; `git replace --graft 6348c2ef` restored `--all` traversal. One broken link remains on purpose: `6348c2ef` ("Republish home: …") keeps its missing parent `be553a9d` because the documented pre-graft tip branch `backup/pre-graft-20260904-105531` still points through it, and that branch is worth more than a clean `fsck`. Hence the three maintenance settings above are off here, and `git fsck` will keep reporting exactly that one link.
 
 ## Sync local agents
 
