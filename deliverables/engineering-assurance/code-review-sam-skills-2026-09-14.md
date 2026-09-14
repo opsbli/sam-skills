@@ -355,6 +355,22 @@ git fetch --refetch --no-tags --force upstream main
 
 ---
 
+### 第十轮：`spawn_execution` 不再等待（🟠 #19）+ mailbox 跨 checkout 过滤（🟠 #23）
+
+**矛盾点**：技能文档在**同一页**写了两件不可能同时成立的事——第 1 步「runner 退出码与 receipt 是否存在**随工具结果返回**」，第 2 步「**不要阻塞**、继续用规划会话」。而阻塞式实现让 MCP 调用**最长持住规划轮次 90 分钟**，恰好摧毁了 ZCode 路线存在的理由（Stop 钩子在**轮次之间**投递 receipt）。阻塞那侧是错的。
+
+| 项目 | 状态 | 改动 | 验证证据 |
+|---|---|---|---|
+| **spawn 阻塞** | ✅ | 改为**异步**：runner 启动后立即返回 `{ok, task_id, status:'running'}`；运行结束由新的 `recordRun()` 追加 mailbox 条目。tool description 与 SKILL.md 第 1 步同步更正 | 新测试：对一个工作 **2.5s** 的 runner，spawn 必须 **<1.5s** 返回、邮箱为空、锁仍持有，且随后 receipt 确实到达。**变异测试**：改回 `await` → 该条立刻变红 |
+| **recordRun 写失败会搁死锁** | ✅ | 条目写不进去时显式 `releaseLockIfHeldBy` + 落日志——运行**已经结束**，不该把 checkout 搁到 6 小时陈旧扫描 | 异常路径不便直测，已注释说明 |
+| **check_mailbox 跨 checkout 混投**（🟠 #23） | ✅ | 除 planner session 外**再按 `checkout` 过滤**；两侧都先路径规范化（spawn 传相对路径、poll 传绝对路径时仍能对上） | 新测试：邮箱里有**另一个 checkout** 的待投递条目 → 本 checkout 轮询返回 `mail: null`，且该条目**保持 pending** |
+
+**测试规模**：`mailbox-cycle.test.mjs` **22 → 24 条**；`verify:all` **14/14**。
+
+**过程中门禁抓到我一次**：我改了 `skills/engineering/execute-spec-in-fork/SKILL.md` 却忘了重建 `.codex-plugin/` 镜像 → `codex-payload` 立刻报 `drifted: .codex-plugin/skills/execute-spec-in-fork/SKILL.md`。重建后 14/14。**这正是新护栏该做的事**——上一轮我加的这条门，这一轮就拦住了我自己。
+
+---
+
 ## 🏗️ 架构影响评估（Archi）
 
 ### 一个根因，六处症状：**「同一条规则被复写多份，且防漂移不接线」**
