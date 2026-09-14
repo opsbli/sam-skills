@@ -1,8 +1,5 @@
 ---
-"to-goal": patch
-"spec-executor": patch
-"harvest": patch
-"project-standards": patch
+"sam-skills": patch
 ---
 
 Guardrail and contract hardening from a repo-wide skills audit.
