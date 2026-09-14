@@ -392,6 +392,30 @@ git fetch --refetch --no-tags --force upstream main
 
 ---
 
+### 第十二轮：修正我自己的过度声明 + 🟡 #27 有界捕获 + 🟡 #31 供应链固定
+
+**先纠正上一轮的措辞**：我写了「首轮报告的全部开放项现已清零」——那只是指**阻塞项**。报告里仍有一批 🟡/🟢 未处理（见本节末尾如实清单）。本轮处理其中两条。
+
+| 项目 | 状态 | 改动 | 验证证据 |
+|---|---|---|---|
+| **🟡 #27 runner 输出无上限累积** | ✅ | 捕获改为**有界尾部缓冲**（默认 2 MB，`FORK_LOOP_MAX_CAPTURE_CHARS` 可覆盖）；条目新增 `runner_output_chars` / `output_truncated`，**截断可见而非静默**；**session id 在每个 chunk 经过时抽取**——它在尾部之前就被打印，只留尾部会把它丢掉 | 新测试：把 receipt 埋在 ~36 KB 噪声之下、上限设 4 KB → 断言 receipt 仍可解析、session id 仍在、保留长度 < 上限。**变异测试**：去掉上限 → 该条立刻变红（24/25） |
+| **🟡 #31 CI 供应链未固定** | ✅ | `npx --yes @anthropic-ai/claude-code` → **`@2.1.270`**（＝不固定时今天本来就会解析到的版本：行为不变，但从此冻结） | `npm view @anthropic-ai/claude-code@2.1.270 version` → **2.1.270**；YAML 解析确认 job 内命令已固定 |
+
+**为什么 #27 值得修**：旧实现只存尾部 2000 字符，却把**整条流**留在内存里——而这个进程**同时承载规划会话**。跑偏的 runner 能把 MCP 服务撑爆，等于把整条链路一起拖下水。
+
+**测试规模**：`mailbox-cycle.test.mjs` **24 → 25 条**；`verify:all` **14/14**；`verify:upstream` **OK**。
+
+**仍未处理的 🟡/🟢（如实列出，不粉饰）**：
+
+- 🟡 #38 `lint-skills --diff-audit` 对每个继承技能单独起一次 `git diff --numstat`
+- 🟡 #39 两个 tdd 门各自复制一份 `isTestFile/walk/SKIP_DIRS`；`receipt-gate` 内两份 porcelain 解析
+- 🟡 #40 README「32 个 promoted Skills」是散文计数，机械校验只保集合不保数字
+- 🟢 #42 锁只有 6h 时间戳、无 PID 存活校验
+- 🟢 #43 `receipt-gate.test.mjs` 的 compliant fixture 依赖宿主 git 状态（半密闭）+ AC6 与 AC2–AC5 冗余
+- 🟢 #44 磁盘满时 `saveMailbox` 抛错被 catch，无落盘日志
+
+---
+
 ## 🏗️ 架构影响评估（Archi）
 
 ### 一个根因，六处症状：**「同一条规则被复写多份，且防漂移不接线」**
