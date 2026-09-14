@@ -11,7 +11,7 @@ One row per golden task. Updated after each run. `Defect signals` at the bottom 
 | spec-executor — receipt contract discipline | spec-executor | 1 | 1/1 | — | 0 | 0 |
 | spec-executor — docs delta and fact settlement | spec-executor | 2 | 1/2 | `Docs delta: none` 掩盖 product-adjacent 决策（silent-deviation；复跑转绿） | 1 | 0 |
 | tdd — seams and red-green discipline | tdd | 2 | 1/2 | 批量写测试（run2；技能未被触达，首败 noise） | 1 | 0 |
-| tdd — test quality at the seam | tdd | 3 | 0/3 | 镜像实现耦合惯例 + 批量写测试；**3 连败 confirmed-defect**。run3 技能未被触达 → 修复条款尚未获有效验证 | 3 | 0 |
+| tdd — test quality at the seam | tdd | 4 | 0/4 | 镜像实现耦合惯例 + 批量写测试；**4 连败**：跨「技能未加载/已加载/已加载+条款」三条件均复现，run4 证明 prompt 级条款无效 | 4 | 0 |
 | code-review — fixed-point standards axis | code-review | 1 | 1/1 | — | 0 | 0 |
 | code-review — spec axis faithfulness | code-review | 1 | 1/1 | — | 0 | 0 |
 
@@ -21,7 +21,7 @@ One row per golden task. Updated after each run. `Defect signals` at the bottom 
 |---|---|---|
 | to-goal | 2/3 | 失败在输出介质歧义（复跑内联回传即过）；被测的 carried-forward 契约两轮全守住 |
 | spec-executor | 2/3 | 首败为执行侧偶发误读（复跑正确回传 Docs delta），契约本身有效 |
-| tdd | 2/5 | **02 号任务三连败 confirmed-defect**；修复条款（Inherited anti-patterns）已入库但**尚未获有效验证**——run3 技能未被触达，条款无从触发 |
+| tdd | 2/6 | **02 号任务四连败**：run4（技能已加载+条款在位+未中断）仍镜像惯例并合理化——prompt 级条款路线证伪，升级 /grill-with-docs |
 | code-review | 2/2 | 双轴结构、机会主义改动识别、标准按名引用全部到位 |
 
 ## How to read it
@@ -39,6 +39,5 @@ One row per golden task. Updated after each run. `Defect signals` at the bottom 
 
 ## Defect signals
 
-- **tdd/02-test-quality-at-the-seam — confirmed-defect（3 连败）**。失败根因分层：run1/2 = 技能已加载但仓库既有耦合惯例被镜像（SKILL.md 已补 Inherited anti-patterns 条款，proposal `2026-09-14-tdd-repo-convention-priority.md` 已批准应用）；**run3 = 技能根本未被触达**（agent 自述未加载任何 skill）→ 修复条款尚未获一次有效验证。
-- **新观察信号：技能触达率方差**——run3 轮次中 tdd/01 与 tdd/02 的会话均未加载任何技能（两 run1 均正常加载）；run3 会话曾经历中断恢复。下一步：未中断的干净复跑（技能实际加载）以验证修复，并观察触达率。
+- **tdd/02-test-quality-at-the-seam — confirmed-defect（4 连败，已升级）**。run4 干净会话（技能加载、条款在位、未中断）仍复现：镜像惯例 + 批量写测试，且把内部计数器断言合理化为 public seam 验证。**结论：prompt 级条款（SKILL.md 文本）无法对抗显式任务指令「Follow the repo's testing conventions」**——与 ADR 0004 Skeptic 异议一致。处置：按 harvest 边界升级 `/grill-with-docs`（技能级重设计：如把「惯例优先级」做成机械门而非提示词）。Inherited anti-patterns 条款保留（方向正确但力不足以单独生效）。
 - to-goal/02 与 spec-executor/02 的首败经复跑转绿，定性 noise，不在本清单。
