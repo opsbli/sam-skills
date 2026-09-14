@@ -20,6 +20,20 @@ Harden the fork-loop transport, the archive gate, and the fork-maintenance path.
   (`taskkill /T /F` on win32) and, after a grace, settles unconditionally: a
   runner that never closes its stream used to leave `spawn_execution` — and the
   checkout lock — hanging indefinitely.
+- `spawn_execution` no longer waits for the run. It returns as soon as the runner
+  has started (`status: "running"` plus the `task_id`), and the mailbox entry is
+  appended when the runner exits. The blocking version contradicted the route it
+  implements — the planning session is supposed to stay usable during a run, which
+  is what the Stop hook delivering the receipt *between turns* is for — and the
+  skill's own step 1 said the exit code comes back in the tool result while step 2
+  said not to block. Callers must read the receipt from the mailbox, not the result.
+  `check_mailbox` also filters entries by checkout, so a shared state directory
+  cannot hand one checkout another's receipt.
+- `stop-hook.cjs` gains its first tests, and stops crashing. A mailbox without a
+  `receipts` array threw a TypeError and exited non-zero, blocking the very Stop
+  event the hook exists to serve. Its write now goes through a temp file and a
+  rename, matching `writeJson` on the MCP side — both processes read-modify-write
+  the same mailbox, and a torn write loses whichever update landed first.
 - `extractReceipt` takes the last receipt block. The launch prompt embeds a
   receipt template under the same heading, so a runner that echoed its prompt had
   the template stored as its result.

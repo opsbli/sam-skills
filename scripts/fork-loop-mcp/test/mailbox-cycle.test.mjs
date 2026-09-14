@@ -40,6 +40,7 @@ const SPLIT_SAFE = !process.execPath.includes(" ");
 const STUB_RUNNER = path.join(root, "stub-runner.mjs");
 const SLOW_RUNNER = path.join(root, "slow-runner.mjs");
 const ECHO_RUNNER = path.join(root, "echo-runner.mjs");
+const DELAYED_RUNNER = path.join(root, "delayed-runner.mjs");
 
 const lockPathFor = (stateDir) =>
   path.join(
@@ -141,6 +142,31 @@ function makeClient(extraEnv = {}) {
   return client;
 }
 
+/**
+ * Poll until `predicate` returns something truthy. Delivery is asynchronous by
+ * design — spawn_execution returns before the runner exits — so every assertion
+ * about a finished run has to wait for the mailbox rather than read it straight
+ * after the spawn call.
+ */
+async function waitFor(predicate, { timeoutMs = 10000, intervalMs = 25 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = predicate();
+    if (value) return value;
+    if (Date.now() > deadline) return null;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
+/** The mailbox before the first entry exists is "no entries", not an error. */
+const boxOrEmpty = (client) => {
+  try {
+    return client.readMailbox();
+  } catch {
+    return { receipts: [] };
+  }
+};
+
 function makeEntry(overrides = {}) {
   return {
     task_id: "task-1",
@@ -196,6 +222,19 @@ before(() => {
       '].join("\\n");',
       'process.stdout.write("[runner] instruction follows:\\n" + template + "\\n");',
       'process.stdout.write("\\nSPEC EXECUTION RECEIPT\\n\\n- Schema: spec-executor-receipt/v2\\n- Conclusion: completed\\n- Spec source: echo-stub\\n");',
+      "",
+    ].join("\n"),
+  );
+
+  // Works for a while, then delivers a receipt. Long enough that whether
+  // spawn_execution waited for it is unambiguous, short enough to leave no
+  // process behind.
+  fs.writeFileSync(
+    DELAYED_RUNNER,
+    [
+      "setTimeout(() => {",
+      '  process.stdout.write("\\nSPEC EXECUTION RECEIPT\\n\\n- Schema: spec-executor-receipt/v2\\n- Conclusion: completed\\n- Spec source: delayed-stub\\n");',
+      "}, 2500);",
       "",
     ].join("\n"),
   );
@@ -436,10 +475,14 @@ test(
     });
 
     assert.equal(spawnResult.payload.ok, true, "spawn must succeed against a working runner");
-    assert.equal(spawnResult.payload.receipt_extracted, true, "the stub's receipt must be parsed");
+    assert.equal(spawnResult.payload.status, "running", "spawn reports a started run, not a finished one");
     assert.equal(fs.existsSync(stub.lockPath), true, "a live execution holds the lock");
 
-    const box = stub.readMailbox();
+    const box = await waitFor(() => {
+      const candidate = boxOrEmpty(stub);
+      return candidate.receipts.length ? candidate : null;
+    });
+    assert.ok(box, "the runner must record a mailbox entry once it exits");
     assert.equal(box.receipts.length, 1, "one run produces exactly one mailbox entry");
     assert.equal(box.receipts[0].state, "pending");
     assert.match(box.receipts[0].receipt, /Conclusion: completed/);
@@ -455,6 +498,62 @@ test(
     assert.equal(fs.existsSync(stub.lockPath), false);
   },
 );
+
+test(
+  "spawn_execution returns while the runner is still working, and delivers later",
+  { skip: SPLIT_SAFE ? false : "process.execPath contains a space" },
+  async () => {
+    // The transport exists so the planning session stays usable during a run. A
+    // spawn that awaited the runner would hold the planning turn for up to the
+    // timeout, which is the contradiction this pins down: the call must come back
+    // while the runner is mid-flight, and the receipt must arrive afterwards.
+    const delayed = makeClient({
+      FORK_LOOP_ZCODE_CMD: `${process.execPath} ${DELAYED_RUNNER}`,
+      FORK_LOOP_RUNNER_TIMEOUT_MS: "60000",
+    });
+    clients.push(delayed);
+
+    const startedAt = Date.now();
+    const spawnResult = await delayed.callTool("spawn_execution", {
+      checkout,
+      planner_session: "sess_A",
+      spec_ready: SPEC_READY,
+    });
+    const elapsedMs = Date.now() - startedAt;
+
+    assert.equal(spawnResult.payload.ok, true);
+    assert.equal(spawnResult.payload.status, "running");
+    assert.ok(
+      elapsedMs < 1500,
+      `spawn must return before the runner finishes; it took ${elapsedMs}ms against a runner that works for 2500ms`,
+    );
+    assert.deepEqual(
+      boxOrEmpty(delayed).receipts,
+      [],
+      "nothing may be in the mailbox while the runner is still working",
+    );
+    assert.equal(fs.existsSync(delayed.lockPath), true, "the in-flight run holds the lock");
+
+    const box = await waitFor(() => {
+      const candidate = boxOrEmpty(delayed);
+      return candidate.receipts.length ? candidate : null;
+    });
+    assert.ok(box, "the receipt must arrive after the runner finishes");
+    assert.match(box.receipts[0].receipt, /- Spec source: delayed-stub/);
+  },
+);
+
+test("check_mailbox ignores receipts recorded for a different checkout", async () => {
+  // With a shared state directory several checkouts share one mailbox file, and
+  // an unfiltered poll would hand one of them another's receipt.
+  const other = fs.realpathSync(fs.mkdtempSync(path.join(root, "other-checkout-")));
+  main.clearLock();
+  main.seedMailbox([makeEntry({ checkout: other })]);
+
+  const { payload } = await main.callTool("check_mailbox", { checkout, planner_session: "sess_A" });
+  assert.equal(payload.mail, null, "another checkout's receipt must not be delivered here");
+  assert.equal(main.readMailbox().receipts[0].state, "pending", "and it must stay pending");
+});
 
 test(
   "an orphan lock past the grace is broken and the run proceeds",
@@ -497,13 +596,17 @@ test(
       planner_session: "sess_A",
       spec_ready: SPEC_READY,
     });
-
     assert.equal(payload.ok, true, "the call must return, not hang on a killed runner");
-    assert.equal(payload.receipt_extracted, false, "a killed runner produces no receipt");
-    assert.equal(payload.runner_exit, null, "a runner terminated by the timeout carries no exit code");
+    assert.equal(payload.status, "running");
 
-    const box = slow.readMailbox();
+    // The overrun is resolved by the server's own timeout, and only then recorded.
+    const box = await waitFor(() => {
+      const candidate = boxOrEmpty(slow);
+      return candidate.receipts.length ? candidate : null;
+    });
+    assert.ok(box, "an overrunning run must still be recorded, not left hanging");
     assert.equal(box.receipts.length, 1, "the overrun run must be recorded for the planner");
+    assert.equal(box.receipts[0].runner_exit, null, "a runner terminated by the timeout carries no exit code");
     assert.equal(box.receipts[0].receipt, null, "no receipt can be extracted from nothing");
 
     // And the planner can hand the checkout back rather than being stuck.
@@ -536,9 +639,15 @@ test(
     });
 
     assert.equal(payload.ok, true);
-    assert.equal(payload.receipt_extracted, true);
+    assert.equal(payload.status, "running");
 
-    const stored = echo.readMailbox().receipts[0].receipt;
+    const box = await waitFor(() => {
+      const candidate = boxOrEmpty(echo);
+      return candidate.receipts.length ? candidate : null;
+    });
+    assert.ok(box, "the echoed run must still record an entry");
+
+    const stored = box.receipts[0].receipt;
     assert.match(stored, /- Conclusion: completed/, "the runner's own block must be extracted");
     assert.doesNotMatch(
       stored,

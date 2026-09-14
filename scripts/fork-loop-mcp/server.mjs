@@ -391,41 +391,70 @@ async function spawnExecution(args) {
     '',
     String(args.spec_ready),
   ].join('\n');
-  const result = await runHeadless(checkout, prompt, task.id);
-  const receipt = extractReceipt(result.out) || extractReceipt(result.err);
-  const box = loadMailbox(checkout);
-  const entry = {
-    task_id: task.id,
-    planner_session: task.planner_session,
-    topic: task.topic,
-    checkout,
-    state: 'pending',
-    runner_exit: result.code,
-    runner_session_id: extractSessionId(result.out),
-    receipt,
-    raw_output_tail: (result.out + result.err).slice(-2000),
-    finishedAt: Date.now(),
-  };
-  box.receipts.push(entry);
-  saveMailbox(checkout, box);
+  // Detached on purpose, and this is the reason the transport exists at all: the
+  // planning session has to stay usable while the runner works, because the Stop
+  // hook delivers the receipt *between turns*. Awaiting the runner here would
+  // hold the planning turn — and the MCP client — for up to the full timeout,
+  // which is precisely what the fork loop was built to avoid. `recordRun` appends
+  // the mailbox entry when the runner exits, long after this call has returned.
+  runHeadless(checkout, prompt, task.id)
+    .then((result) => recordRun(checkout, task, result))
+    .catch((error) =>
+      recordRun(checkout, task, { code: -1, out: '', err: String(error && error.message) }),
+    );
+
   return {
     ok: true,
     task_id: task.id,
-    runner_exit: result.code,
-    runner_session_id: entry.runner_session_id,
-    receipt_extracted: Boolean(receipt),
-    note: receipt
-      ? 'receipt stored as pending; planner Stop hook will deliver it'
-      : 'runner produced no parseable receipt; stored with raw output tail for inspection',
+    status: 'running',
+    note: 'runner started and holds the checkout lock. The receipt lands in the mailbox when the runner exits; the Stop hook delivers it between turns.',
   };
+}
+
+/**
+ * Append a finished run to the mailbox. Invoked from the runner's exit handler,
+ * after spawn_execution has already returned to the planner.
+ */
+function recordRun(checkout, task, result) {
+  try {
+    const receipt = extractReceipt(result.out) || extractReceipt(result.err);
+    const box = loadMailbox(checkout);
+    box.receipts.push({
+      task_id: task.id,
+      planner_session: task.planner_session,
+      topic: task.topic,
+      checkout,
+      state: 'pending',
+      runner_exit: result.code,
+      runner_session_id: extractSessionId(result.out),
+      receipt,
+      raw_output_tail: (result.out + result.err).slice(-2000),
+      finishedAt: Date.now(),
+    });
+    saveMailbox(checkout, box);
+  } catch (error) {
+    // With the entry unwritten the planner is never handed a receipt, and the
+    // lock would sit until the stale sweep. The run is over either way, so
+    // release it and say so instead of stranding the checkout.
+    console.error(`[fork-loop] failed to record run ${task.id}: ${error && error.message}`);
+    releaseLockIfHeldBy(checkout, task.id);
+  }
 }
 
 /** check_mailbox — the Stop hook polls this; deliver pending receipts once. */
 async function checkMailbox(args) {
-  const checkout = args.checkout;
+  const check = normalizeCheckout(args.checkout);
+  if (!check.ok) return { ok: false, error: check.error };
+  const checkout = check.checkout;
   const box = loadMailbox(checkout);
   const deliverable = box.receipts.filter(
-    (r) => r.state === 'pending' && (!args.planner_session || r.planner_session === args.planner_session)
+    (r) =>
+      r.state === 'pending' &&
+      // Every entry records the checkout it ran in. With a shared state directory
+      // (FORK_LOOP_STATE_DIR) several checkouts share one mailbox file, and
+      // without this filter one of them gets handed another's receipt.
+      (!r.checkout || r.checkout === checkout) &&
+      (!args.planner_session || r.planner_session === args.planner_session),
   );
   if (deliverable.length === 0) return { ok: true, mail: null };
   const mail = deliverable[0];
@@ -467,7 +496,7 @@ function settle(args, state) {
 const TOOLS = {
   spawn_execution: {
     description:
-      'Launch a headless ZCode execution session on this checkout with a SPEC READY contract. Returns when the runner exits; the receipt lands in the mailbox. Requires the planning session to register the Stop hook that delivers it.',
+      'Launch a headless ZCode execution session on this checkout with a SPEC READY contract. Returns as soon as the runner has started — it does NOT wait for the run — so the planning session stays usable; the receipt lands in the mailbox when the runner exits, and the Stop hook delivers it between turns. Requires the planning session to register that Stop hook.',
     inputSchema: {
       type: 'object',
       required: ['checkout', 'spec_ready'],
