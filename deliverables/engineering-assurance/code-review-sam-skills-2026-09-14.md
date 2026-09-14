@@ -284,6 +284,34 @@ error: Could not read 6654f6b60cd9d5be8b54c6fafe44346dabeb3b76
 
 ---
 
+### 第七轮：提交批次（工作树已清空）
+
+按主题分 3 组提交，工作树现在**完全干净**（0 条剩余）——因此 `verify:all` 的结果**验证的就是已提交的内容**，而非"工作树恰好是绿的"。
+
+| 提交 | 主题 | 规模 |
+|---|---|---|
+| `6b65003` | `fix(fork-loop-mcp)`: 关闭命令注入、收窄锁释放、让超时 runner 收口 | 2 文件，+788/−92 |
+| `fdacd60` | `feat(guards)`: verify 单一入口、契约驱动的归档门、三个新护栏、同步与版本身份加固 | 37 文件，+1666/−205 |
+| `6bbb8c6` | `chore`: 提交审计证据（skill-audit、本报告、out-of-scope 说明） | 3 文件，+723 |
+| （早先）`e99af92` | `fix(agents-md)`: 提交真实的 AGENTS.md（9 → 863 字节） | 1 文件 |
+
+**提交后的最终验证（针对已提交内容）**：`npm run verify:all` → **13/13**；`receipt-gate.test.mjs` → **16/16**；`mailbox-cycle.test.mjs` → **22/22**。
+
+**副产品：对象库修复的前提已满足。** 「第五轮」列出的 Option B 需要"工作树干净"这一硬前提——**现在已经满足**，唯一剩下的阻塞是网络（远端 502）。
+
+#### 🆕 提交过程中发现的硬故障：`changeset version` 无法运行
+
+- **现象**：`npx changeset status` → `Error: Found changeset expression-layer-style-pass for package ask-matt which is not in the workspace`。
+- **根因**：`.changeset/` 下 4 个 changeset 的 frontmatter 用 **skill 名当包名**（`ask-matt`、`code-review`、`to-goal`、`harvest`、`evals`、`project-standards`…，共 **24 个键**），而工作区里**唯一的包是根 `sam-skills`**（`skills/` 下没有任何 `package.json`）。
+- **影响**：`npm run version` 的第一步就是 `changeset version` → **必失败**。也就是说发布链比首轮报告描述的更早断（首轮说"版本 PR 变不绿"，实际是**版本命令根本跑不起来**）。这解释了 `CHANGELOG.md` 里那句 "manual bump（changelog-pat 拿不到）" 背后的真实处境。
+- **我做了什么**：本轮的 changeset（`fork-loop-and-gate-hardening.md`）用**合法包名** `sam-skills`，实测 `[OK]`；**没有**擅自改那 4 个既有 changeset——那属于仓库约定决策。
+- **两条修复路径（需你选）**：
+  1. **收敛到单包（机械、5 分钟）**：把 4 个 changeset 的 24 个键全部替换为 `"sam-skills": patch`，散文原样保留。`changeset version` 立即可用。
+  2. **让 skill 成为真正的 workspace 包**：给每个 skill 目录加 `package.json` + 根 `workspaces` 配置。这样 per-skill 版本语义成立，但仓库形态改变较大（约 40 个包），且 `privatePackages.version: true` 下每个 skill 会独立 bump。
+  - **建议选 1**：仓库现在只有根版本有意义（`1.2.3-to-goal.3`），per-skill 版本是未落地的心智模型。
+
+---
+
 ## 🏗️ 架构影响评估（Archi）
 
 ### 一个根因，六处症状：**「同一条规则被复写多份，且防漂移不接线」**
