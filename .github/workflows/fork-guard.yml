@@ -52,3 +52,49 @@ jobs:
       - name: Validate Claude plugin
         run: npx --yes @anthropic-ai/claude-code plugin validate . --strict
         continue-on-error: false
+
+  # A second platform, deliberately. The fork loop runs on win32 and the repo's
+  # own docs say so, but every guard has only ever run on ubuntu-latest — so the
+  # win32-only branches (taskkill /T /F as the tree kill, a shell-less spawn
+  # resolving bare `node` off PATH, backslash paths through the mailbox and the
+  # diff audit) had no coverage at all. Contributors work on Windows too, and
+  # `npm run verify:all` failing there while CI is green is the failure this job
+  # exists to prevent. It costs a second runner for the same command set.
+  guard-windows:
+    name: Same guards on Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run every read-only guard and its test suites
+        run: npm run verify:all
+
+      - name: Fetch upstream for the drift audit
+        run: |
+          git remote add upstream https://github.com/mattpocock/skills.git
+          git fetch --no-tags upstream main
+
+      - name: Inherited-skill drift audit
+        run: npm run verify:upstream
+
+      # The bash tooling stays Linux-only in CI: `sync-local-skills.sh` needs
+      # rsync, which the Windows image does not carry. Git for Windows is on the
+      # image though, so at least the parse can be checked on the platform
+      # contributors actually work on.
+      - name: Shell syntax check for the bash tooling
+        shell: bash
+        run: |
+          for file in scripts/*.sh; do
+            bash -n "$file" || exit 1
+          done
