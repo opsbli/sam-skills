@@ -1,0 +1,200 @@
+#!/usr/bin/env node
+// receipt-gate.test.mjs — synthetic-error coverage for the N1 receipt gate
+// validator (US-4). Covers AC1 (compliant pass-through), AC2–AC5 (each gate
+// intercepts its error class), AC6 (four synthetic error classes 4/4),
+// AC7 (zero third-party imports), AC8 (--check self-check).
+// Zero-dependency: node:test only.
+//
+// Run: node --test scripts/receipt-gate.test.mjs
+
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const script = join(dirname(fileURLToPath(import.meta.url)), "receipt-gate.mjs");
+const repo = join(dirname(script), "..");
+const node = process.execPath;
+
+function runOn(content, name = "receipt.md") {
+  const dir = mkdtempSync(join(tmpdir(), "receipt-gate-test-"));
+  const file = join(dir, name);
+  writeFileSync(file, content, "utf8");
+  try {
+    return spawnSync(node, [script, "--receipt", file], { encoding: "utf8" });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function runStdin(content) {
+  return spawnSync(node, [script, "--receipt", "-"], {
+    input: content,
+    encoding: "utf8",
+  });
+}
+
+function currentPorcelain() {
+  return execFileSync("git", ["status", "--porcelain"], {
+    cwd: repo,
+    encoding: "utf8",
+  })
+    .split(/\r?\n/)
+    .filter(Boolean);
+}
+
+function compliantReceipt(worktreeLines) {
+  return `SPEC EXECUTION RECEIPT
+
+- Schema: spec-executor-receipt/v2
+- Conclusion: completed
+- Spec source: .scratch/demo/issues/01.md
+- Review fixed point: abc1234
+- Acceptance criteria: AC1 gate CLI validates a compliant receipt - pass \`node scripts/receipt-gate.mjs --receipt fixture.md\` exits 0 with 6/6
+- Main changes: added the receipt gate validator
+- Changed files: scripts/receipt-gate.mjs
+- Branch / commit / review: local branch, not pushed
+- Validation results: node --test scripts/receipt-gate.test.mjs all green
+- Review findings: none
+- Not validated or not executed: push, deploy
+- Risks and remaining work: none
+- Planning-thread decision needed: none
+- Final worktree state: ${worktreeLines.join("\n")}
+- External effects: none
+- Docs delta: none
+- Receipt metrics: fork-or-express: fork | archive-gates: pass | archive-gate-failures: 0 | grill-rounds: 2 | criteria-evidenced: 1/1 | docs-delta: none | skill-friction: none
+`;
+}
+
+test("AC1: compliant receipt passes all six gates (exit 0)", () => {
+  const res = runOn(compliantReceipt(currentPorcelain()));
+  assert.equal(res.status, 0, res.stdout + res.stderr);
+  assert.match(res.stdout, /Result: 6\/6 — 归档：放行/);
+});
+
+test("AC2: missing Schema first field intercepted by Gate 2 (101011)", () => {
+  const bad = compliantReceipt(currentPorcelain()).replace(
+    /- Schema: spec-executor-receipt\/v2\n/,
+    "",
+  );
+  const res = runOn(bad);
+  assert.equal(res.status, 1);
+  assert.match(res.stdout, /101011/);
+  assert.match(res.stdout, /Gate 2 .*FAIL/);
+});
+
+test("AC3: multi-token Conclusion intercepted by Gate 3 (101003)", () => {
+  const bad = compliantReceipt(currentPorcelain()).replace(
+    "- Conclusion: completed",
+    "- Conclusion: partially completed",
+  );
+  const res = runOn(bad);
+  assert.equal(res.status, 1);
+  assert.match(res.stdout, /101003/);
+});
+
+test("AC4: unevidenced acceptance criterion intercepted by Gate 4 (101004)", () => {
+  const bad = compliantReceipt(currentPorcelain()).replace(
+    /- Acceptance criteria: .*\n/,
+    "- Acceptance criteria: AC1 gate CLI validates a compliant receipt - pass `node scripts/receipt-gate.mjs` exits 0\nAC2 logout flow clears the session\n",
+  );
+  const res = runOn(bad);
+  assert.equal(res.status, 1);
+  assert.match(res.stdout, /101004/);
+  assert.match(res.stdout, /第 2 条/);
+});
+
+test("AC5: worktree drift intercepted by Gate 6 (101006)", () => {
+  const bad = compliantReceipt(["?? phantom-drift-file-definitely-absent.ts"]);
+  const res = runOn(bad);
+  assert.equal(res.status, 1);
+  assert.match(res.stdout, /101006/);
+  assert.match(res.stdout, /phantom-drift-file-definitely-absent\.ts/);
+});
+
+test("Gate 2: multiple receipts in one file intercepted (101002)", () => {
+  const doubled =
+    compliantReceipt(currentPorcelain()) + "\n" + compliantReceipt([]);
+  const res = runOn(doubled);
+  assert.equal(res.status, 1);
+  assert.match(res.stdout, /101002/);
+  assert.match(res.stdout, /2 份 receipt/);
+});
+
+test("Gate 2: no receipt block at all intercepted (101002)", () => {
+  const res = runOn("hello world, no receipt here\n");
+  assert.equal(res.status, 1);
+  assert.match(res.stdout, /101002/);
+  assert.match(res.stdout, /receipt 缺失/);
+});
+
+test("AC6: four synthetic error classes intercepted 4/4", () => {
+  const cases = [
+    [
+      /101011/,
+      compliantReceipt(currentPorcelain()).replace(
+        /- Schema: spec-executor-receipt\/v2\n/,
+        "",
+      ),
+    ],
+    [
+      /101003/,
+      compliantReceipt(currentPorcelain()).replace(
+        "- Conclusion: completed",
+        "- Conclusion: partially completed",
+      ),
+    ],
+    [
+      /101004/,
+      compliantReceipt(currentPorcelain()).replace(
+        /- Acceptance criteria: .*\n/,
+        "- Acceptance criteria: AC1 works\n",
+      ),
+    ],
+    [/101006/, compliantReceipt(["?? phantom-drift-file-definitely-absent.ts"])],
+  ];
+  for (const [code, content] of cases) {
+    const res = runOn(content);
+    assert.equal(res.status, 1, `expected interception for ${code}`);
+    assert.match(res.stdout, code);
+  }
+});
+
+test("AC7: validator imports node builtins only (zero third-party deps)", () => {
+  const src = readFileSync(script, "utf8");
+  assert.doesNotMatch(src, /from\s+["'](?!node:)[^"']+["']/);
+  assert.doesNotMatch(src, /require\(/);
+});
+
+test("AC8: --check self-check passes against contract sources", () => {
+  const res = spawnSync(node, [script, "--check"], { encoding: "utf8" });
+  assert.equal(res.status, 0, res.stdout + res.stderr);
+  assert.match(res.stdout, /防漂移自检通过/);
+});
+
+test("AC1-stdin: compliant receipt piped via stdin passes all six gates (exit 0)", () => {
+  const res = runStdin(compliantReceipt(currentPorcelain()));
+  assert.equal(res.status, 0, res.stdout + res.stderr);
+  assert.match(res.stdout, /Result: 6\/6 — 归档：放行/);
+});
+
+test("AC1-stdin: non-compliant receipt piped via stdin is intercepted (exit 1, JSON envelope)", () => {
+  const bad = compliantReceipt(currentPorcelain()).replace(
+    "- Conclusion: completed",
+    "- Conclusion: partially completed",
+  );
+  const res = runStdin(bad);
+  assert.equal(res.status, 1, res.stdout + res.stderr);
+  assert.match(res.stdout, /101003/);
+  assert.match(res.stdout, /Gate 3 .*FAIL/);
+  assert.match(res.stdout, /"code":"101003"/); // same JSON envelope line
+});
+
+test("AC2: file-path mode unchanged — --receipt <path> still works", () => {
+  const res = runOn(compliantReceipt(currentPorcelain()));
+  assert.equal(res.status, 0, res.stdout + res.stderr);
+  assert.match(res.stdout, /Result: 6\/6 — 归档：放行/);
+});

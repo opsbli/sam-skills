@@ -50,6 +50,10 @@ Pure wording polish on an inherited skill is rejected in review. Two mechanical 
 - `node scripts/lint-skills.mjs --diff-audit upstream/main` reports every inherited skill's changed-line count against upstream and warns when a skill exceeds the 40-line budget without a changeset mentioning its name. Warn-only for two releases, then it becomes a hard gate.
 - The pull request template requires declaring (a)/(b)/(c) for any inherited-skill expression-layer change.
 
+## Receipt gate
+
+`npm run receipt:gate -- --receipt <file>` runs the six-gate archival validator (N1, US-4) on a `SPEC EXECUTION RECEIPT` v2 file: per-gate PASS/FAIL with JSON report lines (6-digit codes 101001–101006 / 101011), exit 0 only when all six gates pass. The receipt's `Final worktree state` must list entries in `git status --porcelain` form (or plain paths); write `clean` when the tree is empty. `npm run receipt:gate -- --check` self-checks the validator's rules against the contract sources (`spec-executor` SKILL.md + the error-code registry in `delivery/系统设计.md`). Synthetic-error coverage: `npm run test:receipt-gate`.
+
 ## Sync drills
 
 `npm run sync:upstream` must never be a leap of faith. `bash scripts/sync-drill.sh` runs a throwaway trial rebase onto the fetched upstream tip, records conflicted files, conflict hunks, and estimated review minutes in `docs/sync-drill-log.md`, and cleans up after itself. Run it quarterly and on every upstream release; a drill reporting more than 20 conflicted files means stop drilling and do the real sync now. The drill also watches whether upstream's `implement-spec` has been promoted out of `in-progress` — when it trips, follow [docs/upstream-collision-playbook.md](./upstream-collision-playbook.md).

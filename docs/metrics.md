@@ -4,6 +4,7 @@ Zero-dependency telemetry for the spec-execution pipeline: one row per validated
 
 | Date | Spec source | Route | Grill rounds | Archive gates | Archive-gate failures | Criteria evidenced | Docs delta lines | Skill friction | Quality |
 |---|---|---|---|---|---|---|---|---|---|
+| 2026-09-14 | .scratch/receipt-stdin/spec.md | fork | 0 | pass (6/6, validated via the new stdin mode) | 0 (1 planning-thread bounce on Gate 6: receipt omitted the untracked receipt deliverable; executor amended) | 2/2 | 1 | none | accurate |
 
 `Route` is `fork` or `express`; `Criteria evidenced` is `<n>/<m>`; `Skill friction` is `none` or a one-line summary (full text lives in [skill-friction-log.md](./skill-friction-log.md)); `Quality` is the retrospective `Goal / spec quality` label (`accurate` / `criteria-too-vague` / `criteria-wrong` / `missing-constraint` / `over-scoped`) or blank.
 

@@ -24,3 +24,11 @@ A surviving Skeptic objection shaped the third change: two threads on one checko
 ## Surviving dissent
 
 The Skeptic's broader claim — that boundaries enforced only by prompt-level discipline are weak — was narrowed but not defeated. The gates make violations cheaply detectable; they do not make them impossible. If a real drift or race incident occurs, revisit checkout isolation (worktree forks) rather than adding more gate text.
+
+## Amendment 2026-09-14: schema bumped to v2 (backfilled)
+
+The `Schema` token shipped as `spec-executor-receipt/v1` (Decision 1 above). It was later bumped to `spec-executor-receipt/v2` in `spec-executor/SKILL.md` without this ADR being updated — the exact silent-evolution failure mode Decision 1 exists to prevent. Recorded here, backfilled:
+
+- **What changed:** two required additions to the receipt body. (a) `Docs delta` must write `none` explicitly when empty — a blank field is a defect, not an empty one, so the empty-delta case is distinguishable from a forgotten field. (b) `Receipt metrics` — a required, one-line, machine-parseable metrics line (`fork-or-express` / `archive-gates` / `archive-gate-failures` / `grill-rounds` / `criteria-evidenced` / `docs-delta` / `skill-friction`), with `skill-friction` written explicitly (`none` counts, blank does not).
+- **Why it warranted a bump:** both are added required fields — precisely the bump rule Decision 1 states.
+- **Process gap:** the bump was applied to the skill template but never recorded here, so the ADR claimed v1 while the enforced contract was v2. Consumers written against the ADR text (including the US-4 gate validator, which pins `spec-executor-receipt/v2`) were correct; the ADR was stale. Future bumps must edit this ADR and the skill template in the same changeset.

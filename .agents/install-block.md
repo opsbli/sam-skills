@@ -17,7 +17,7 @@ claude plugin install sam-skills@opsbli
 
 ## Codex — fork marketplace
 
-The fork also ships a native Codex plugin: `.codex-plugin/plugin.json` plus a generated flat copy of the promoted skills (see [ADR 0005](./adr/0005-ship-as-a-codex-plugin.md)). Add the fork repository as a marketplace, then install its plugin:
+The fork also ships a native Codex plugin: `.codex-plugin/plugin.json` plus a generated flat copy of the promoted skills (see [ADR 0006](./adr/0006-ship-as-a-codex-plugin.md)). Add the fork repository as a marketplace, then install its plugin:
 
 <canonical-block name="codex">
 
