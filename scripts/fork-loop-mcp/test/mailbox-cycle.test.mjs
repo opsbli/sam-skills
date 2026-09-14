@@ -41,6 +41,7 @@ const STUB_RUNNER = path.join(root, "stub-runner.mjs");
 const SLOW_RUNNER = path.join(root, "slow-runner.mjs");
 const ECHO_RUNNER = path.join(root, "echo-runner.mjs");
 const DELAYED_RUNNER = path.join(root, "delayed-runner.mjs");
+const BIG_RUNNER = path.join(root, "big-runner.mjs");
 
 const lockPathFor = (stateDir) =>
   path.join(
@@ -235,6 +236,19 @@ before(() => {
       "setTimeout(() => {",
       '  process.stdout.write("\\nSPEC EXECUTION RECEIPT\\n\\n- Schema: spec-executor-receipt/v2\\n- Conclusion: completed\\n- Spec source: delayed-stub\\n");',
       "}, 2500);",
+      "",
+    ].join("\n"),
+  );
+
+  // Announces its session id up front, then buries the receipt under far more
+  // output than the capture bound — the shape that distinguishes a bounded tail
+  // from a buffer that grows with whatever the runner prints.
+  fs.writeFileSync(
+    BIG_RUNNER,
+    [
+      'process.stdout.write("banner: session sess_11111111-2222-3333-4444-555555555555\\n");',
+      'process.stdout.write("noise ".repeat(6000) + "\\n");',
+      'process.stdout.write("\\nSPEC EXECUTION RECEIPT\\n\\n- Schema: spec-executor-receipt/v2\\n- Conclusion: completed\\n- Spec source: big-stub\\n");',
       "",
     ].join("\n"),
   );
@@ -616,6 +630,52 @@ test(
     });
     assert.equal(ack.payload.lock_released, true, "the lock must be releasable after an overrun");
     assert.equal(fs.existsSync(slow.lockPath), false);
+  },
+);
+
+test(
+  "a huge runner output is kept as a bounded tail without losing the receipt or the session id",
+  { skip: SPLIT_SAFE ? false : "process.execPath contains a space" },
+  async () => {
+    // The capture used to grow with whatever the runner printed, while only the
+    // last 2000 characters were ever stored. A runaway runner could therefore
+    // exhaust the process that also hosts the planning session. The bound is
+    // env-overridable so it can be asserted rather than estimated.
+    const big = makeClient({
+      FORK_LOOP_ZCODE_CMD: `${process.execPath} ${BIG_RUNNER}`,
+      FORK_LOOP_MAX_CAPTURE_CHARS: "4000",
+    });
+    clients.push(big);
+
+    const { payload } = await big.callTool("spawn_execution", {
+      checkout,
+      planner_session: "sess_A",
+      spec_ready: SPEC_READY,
+    });
+    assert.equal(payload.ok, true);
+
+    const box = await waitFor(() => {
+      const candidate = boxOrEmpty(big);
+      return candidate.receipts.length ? candidate : null;
+    });
+    assert.ok(box, "the run must be recorded");
+
+    const entry = box.receipts[0];
+    assert.ok(
+      entry.runner_output_chars <= 4000,
+      `capture must stay bounded at the configured limit, got ${entry.runner_output_chars} chars`,
+    );
+    assert.equal(entry.output_truncated, true, "truncation must be reported, not silent");
+    assert.match(
+      entry.receipt,
+      /- Spec source: big-stub/,
+      "the receipt is the runner's final block, so the tail capture must still find it",
+    );
+    assert.equal(
+      entry.runner_session_id,
+      "sess_11111111-2222-3333-4444-555555555555",
+      "the session id is announced early, so it has to be picked out before the tail discards it",
+    );
   },
 );
 

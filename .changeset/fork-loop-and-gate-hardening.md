@@ -34,6 +34,13 @@ Harden the fork-loop transport, the archive gate, and the fork-maintenance path.
   event the hook exists to serve. Its write now goes through a temp file and a
   rename, matching `writeJson` on the MCP side — both processes read-modify-write
   the same mailbox, and a torn write loses whichever update landed first.
+- Runner output is captured as a bounded tail (2 MB, `FORK_LOOP_MAX_CAPTURE_CHARS`)
+  instead of growing with whatever the runner prints, and the entry records
+  `runner_output_chars` / `output_truncated`. Only the last 2000 characters were
+  ever stored, so holding the entire stream in memory was how a runaway runner
+  could exhaust the process that also hosts the planning session. The session id
+  is picked out of each chunk on the way past, because it is announced before the
+  tail is reached.
 - `extractReceipt` takes the last receipt block. The launch prompt embeds a
   receipt template under the same heading, so a runner that echoed its prompt had
   the template stored as its result.

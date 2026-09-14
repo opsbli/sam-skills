@@ -49,8 +49,11 @@ jobs:
       - name: Inherited-skill drift audit
         run: npm run verify:upstream
 
+      # Pinned. An unpinned `npx --yes` downloads whatever is newest at run time,
+      # so this gate could change behaviour — or break — without a commit here,
+      # and the same commit could pass locally and fail in CI. Bump deliberately.
       - name: Validate Claude plugin
-        run: npx --yes @anthropic-ai/claude-code plugin validate . --strict
+        run: npx --yes @anthropic-ai/claude-code@2.1.270 plugin validate . --strict
         continue-on-error: false
 
   # A second platform, deliberately. The fork loop runs on win32 and the repo's

@@ -194,6 +194,13 @@ function extractSessionId(text) {
 const RUNNER_TIMEOUT_MS = Number(process.env.FORK_LOOP_RUNNER_TIMEOUT_MS) || 90 * 60 * 1000;
 const KILL_GRACE_MS = Number(process.env.FORK_LOOP_KILL_GRACE_MS) || 30 * 1000;
 
+// Bounded capture. A runaway runner can print far more than any receipt needs,
+// and holding the entire stream in memory only to store its last 2000 characters
+// is how a process that also hosts the planning session runs out of room. The
+// receipt is the runner's final block and extractReceipt scans from the end, so a
+// tail is enough. Env-overridable so the bound itself can be asserted.
+const MAX_CAPTURE_CHARS = Number(process.env.FORK_LOOP_MAX_CAPTURE_CHARS) || 2 * 1024 * 1024;
+
 /**
  * Kill the runner and everything it spawned.
  *
@@ -245,6 +252,8 @@ function runHeadless(checkout, prompt, taskId) {
   return new Promise((resolve) => {
     let out = '';
     let err = '';
+    let sessionId = null;
+    let truncated = false;
     let settled = false;
     let timer = null;
     let killTimer = null;
@@ -253,7 +262,7 @@ function runHeadless(checkout, prompt, taskId) {
       settled = true;
       if (timer) clearTimeout(timer);
       if (killTimer) clearTimeout(killTimer);
-      resolve({ code, out, err: extra ? `${err}\n${extra}` : err });
+      resolve({ code, out, err: extra ? `${err}\n${extra}` : err, sessionId, truncated });
     };
     const child = spawn(bin, args, {
       cwd: checkout,
@@ -270,11 +279,21 @@ function runHeadless(checkout, prompt, taskId) {
       // wrapper, which must then be wrapped explicitly.
       shell: false,
     });
+    const capture = (current, chunk) => {
+      const text = String(chunk);
+      // The session id can be announced early, so it is picked out of every
+      // chunk on the way past — a tail-only capture would lose it.
+      if (!sessionId) sessionId = extractSessionId(text);
+      const next = current + text;
+      if (next.length <= MAX_CAPTURE_CHARS) return next;
+      truncated = true;
+      return next.slice(next.length - MAX_CAPTURE_CHARS);
+    };
     child.stdout.on('data', (d) => {
-      out += d;
+      out = capture(out, d);
     });
     child.stderr.on('data', (d) => {
-      err += d;
+      err = capture(err, d);
     });
     timer = setTimeout(() => {
       try {
@@ -426,7 +445,9 @@ function recordRun(checkout, task, result) {
       checkout,
       state: 'pending',
       runner_exit: result.code,
-      runner_session_id: extractSessionId(result.out),
+      runner_session_id: result.sessionId || extractSessionId(result.out),
+      runner_output_chars: (result.out + result.err).length,
+      output_truncated: Boolean(result.truncated),
       receipt,
       raw_output_tail: (result.out + result.err).slice(-2000),
       finishedAt: Date.now(),
