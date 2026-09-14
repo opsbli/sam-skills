@@ -99,6 +99,7 @@ const TESTS = [
   { id: "test-receipt-gate", label: "receipt gate synthetic-error coverage", file: "scripts/receipt-gate.test.mjs" },
   { id: "test-coupling-gate", label: "coupling gate self-test", file: "scripts/test-coupling-gate.test.mjs" },
   { id: "test-mailbox-cycle", label: "fork-loop mailbox cycle", file: "scripts/fork-loop-mcp/test/mailbox-cycle.test.mjs" },
+  { id: "test-stop-hook", label: "fork-loop stop hook delivery", file: "scripts/fork-loop-mcp/test/stop-hook.test.mjs" },
 ];
 
 const argv = process.argv.slice(2);

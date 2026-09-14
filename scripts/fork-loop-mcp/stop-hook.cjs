@@ -64,6 +64,10 @@ function main() {
   } catch {
     process.exit(0);
   }
+  // A malformed mailbox must never fail the run. `box.receipts.find` on a `{}` —
+  // or on anything that is not an array — throws a TypeError, and a hook that
+  // throws blocks the very Stop event it exists to serve.
+  if (!box || !Array.isArray(box.receipts)) process.exit(0);
   const sessionId = input.session_id || input.sessionId || process.env.CLAUDE_SESSION_ID || null;
   const mail = box.receipts.find(
     (r) => r.state === 'pending' && (!sessionId || !r.planner_session || r.planner_session === sessionId)
@@ -71,9 +75,15 @@ function main() {
   if (!mail) process.exit(0);
 
   // Mark delivered so the next Stop does not re-deliver (exactly-once per receipt).
+  // Written through a temp file and renamed, matching writeJson on the MCP side:
+  // the two processes read-modify-write the same mailbox, and a torn write there
+  // loses whichever update landed first.
   mail.state = 'delivered';
   mail.deliveredAt = Date.now();
-  fs.writeFileSync(mailboxFile(checkout), JSON.stringify(box, null, 2));
+  const file = mailboxFile(checkout);
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(box, null, 2));
+  fs.renameSync(tmp, file);
 
   const context = [
     `[fork-loop] Execution receipt returned (task ${mail.task_id}, topic: ${mail.topic || 'n/a'}).`,

@@ -339,6 +339,22 @@ git fetch --refetch --no-tags --force upstream main
 
 ---
 
+### 第九轮：`stop-hook.cjs` —— 补齐首轮 🔴 #10
+
+对象库收尾后，首轮报告的 **🔴 #10（投递钩子零测试）** 被漏下了（它只在泰莎的补测计划里，没进我的行动清单）。本轮补齐。
+
+| 项目 | 状态 | 改动 | 验证证据 |
+|---|---|---|---|
+| **投递钩子零测试** | ✅ | 新增 `scripts/fork-loop-mcp/test/stop-hook.test.mjs`，**12 条真断言**，注册进 `verify:all` | 12/12 通过；`verify:all` **14/14** |
+| **malformed mailbox 抛未捕获异常**（原 🔴 #10 / 发现 #13 的另一半） | ✅ | `box.receipts` 缺失或非数组时，`box.receipts.find` 抛 `TypeError` → 非零退出 → **阻断它本该服务的那个 Stop 事件**。现改为静默 pass | 两条新测试（`{}` 与 `receipts: "nope"`）；**变异测试**：去掉守卫 → 这两条立刻变红（10/12） |
+| **mailbox 写入非原子**（🟠 #23） | ✅ | 钩子改用 `<file>.<pid>.tmp` + `renameSync`，与 MCP 侧 `writeJson` 同一纪律——两侧都在对同一份 mailbox 做 read-modify-write，撕裂写会丢掉先落地的更新 | 原子性**由构造保证**；见下方"诚实说明" |
+
+**覆盖的 12 项行为**：空 stdin / 不可解析 stdin / 无 mailbox / mailbox 不可读 / 无 `receipts` 数组 / `receipts` 非数组 / session 不匹配（且条目不消耗）/ 正常投递并落盘 `delivered`+时间戳 / 二次 Stop 静默（exactly-once）/ 无 receipt 时注入 WARNING 与 raw tail / 状态目录无残留 / 从嵌套 cwd 向上找到 mailbox。
+
+**一处我自己纠正的不严谨**：第 11 条测试最初被我写成"原子写验证"，但它**没有判别力**——直接写与 tmp+rename 都不留残留文件，两种实现下都通过，属于假信号。已改为如实命名「状态目录无残留」，并在注释里明确：**原子性由构造保证，且刻意不用一条看不见它的测试去声称**。
+
+---
+
 ## 🏗️ 架构影响评估（Archi）
 
 ### 一个根因，六处症状：**「同一条规则被复写多份，且防漂移不接线」**
