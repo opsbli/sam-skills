@@ -416,6 +416,18 @@ git fetch --refetch --no-tags --force upstream main
 
 ---
 
+### 第十四轮：🟡 #38 —— diff-audit 的 N 次 git 子进程
+
+| 项目 | 状态 | 改动 | 验证证据 |
+|---|---|---|---|
+| **🟡 #38** | ✅ | `runDiffAudit` 从「**每个继承技能一次** `git diff --numstat`」改为**一次覆盖全部被审目录、按文件分组**；`--no-renames` 保证每个变更文件单行纯路径（分组不被 rename 花括号语法迷惑）；路径全部用正斜杠（git 在所有平台都打印 `/`，分组不依赖宿主分隔符） | 输出与改前**逐行一致**：25/25 audited、各技能行数相同、6 条 warning 全部标上 `(changeset)`。耗时 **6466ms → 1011ms（6.4×）**，`verify:upstream` **6913ms → 1491ms** |
+
+**一个行为取舍（写明）**：旧实现对「单个技能 diff 失败」是软处理（记 `unreadable` 后继续），新实现是**一次 diff 要么整体成功要么 abort**。这与文件头承诺的 fail-closed 一致（"a diff that errors instead of returning empty → exits 2"），但意味着一次 git 故障会拦下整个审计、而不是只跳过一个技能。我认为这是对的方向：**部分审计比没有审计更危险**——它会打出 `audited 24/25` 然后照样绿灯。
+
+**为什么这个性能修复现在更值钱**：上一轮加了 Windows CI job——这 25 次 git spawn 原本要在 runner 上**跑两遍**，而 Windows 上每次 spawn 更贵。
+
+---
+
 ## 🏗️ 架构影响评估（Archi）
 
 ### 一个根因，六处症状：**「同一条规则被复写多份，且防漂移不接线」**
