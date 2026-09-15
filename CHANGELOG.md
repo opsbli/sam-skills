@@ -1,5 +1,111 @@
 # mattpocock-skills
 
+## 1.2.3
+
+### Patch Changes
+
+- [`4f202ed`](https://github.com/opsbli/sam-skills/commit/4f202eda221555a03ed887e607b69b58670752e4) - Expression-layer style pass across inherited skills: punctuation and wording normalization only (colon-separated clauses rewritten as em-dash parentheticals; no rule, step, or behavior changed). Nominated under the inherited-skill 40-line diff-audit budget — the per-skill overage is the accumulated diff of these cosmetic edits vs upstream/main, verified by diff sampling (triage, ask-matt, wayfinder spot-checks show balanced +/- lines with identical semantics).
+
+  The inherited skills this pass touches, named here because `lint-skills.mjs --diff-audit` looks for the skill name anywhere in a changeset to grant the budget exemption — so the names have to survive in this body, not only in frontmatter that a single-package workspace cannot carry: ask-matt, code-review, codebase-design, diagnosing-bugs, domain-modeling, grilling, improve-codebase-architecture, prototype, setup-matt-pocock-skills, teach, to-tickets, triage, wayfinder, wizard, writing-for-agents.
+
+- [`fdacd60`](https://github.com/opsbli/sam-skills/commit/fdacd60827cfeffa078e514966cca70059babe61) - Harden the fork-loop transport, the archive gate, and the fork-maintenance path.
+
+  - `fork-loop-mcp` no longer routes the runner through a shell. `checkout` and the
+    prompt-file path reach argv verbatim, so `shell: true` on win32 handed them to
+    `cmd.exe` and a legal directory name containing `&` or `%` was parsed as syntax.
+    The checkout is now canonicalised with `realpathSync` and rejected unless it is
+    a directory. (Verified: a bare `node` still resolves without a shell; `&`, spaces
+    and `%` stay literal; the same payload under `shell: true` executed `&& echo`.)
+  - The single-active-execution lock holds. Release is scoped to the task that owns
+    it, so a late `ack_receipt`/`fail_receipt` for an already-settled task can no
+    longer drop the lock of the execution running right now; a lock directory with
+    no recorded holder is refused instead of being read as infinitely old and
+    stolen; and an orphan lock past its own grace is still reclaimable.
+    `release_execution` now requires a matching `task_id` or an explicit `force`.
+  - An overrunning runner settles. The timeout escalates to a tree kill
+    (`taskkill /T /F` on win32) and, after a grace, settles unconditionally: a
+    runner that never closes its stream used to leave `spawn_execution` — and the
+    checkout lock — hanging indefinitely.
+  - `spawn_execution` no longer waits for the run. It returns as soon as the runner
+    has started (`status: "running"` plus the `task_id`), and the mailbox entry is
+    appended when the runner exits. The blocking version contradicted the route it
+    implements — the planning session is supposed to stay usable during a run, which
+    is what the Stop hook delivering the receipt _between turns_ is for — and the
+    skill's own step 1 said the exit code comes back in the tool result while step 2
+    said not to block. Callers must read the receipt from the mailbox, not the result.
+    `check_mailbox` also filters entries by checkout, so a shared state directory
+    cannot hand one checkout another's receipt.
+  - `stop-hook.cjs` gains its first tests, and stops crashing. A mailbox without a
+    `receipts` array threw a TypeError and exited non-zero, blocking the very Stop
+    event the hook exists to serve. Its write now goes through a temp file and a
+    rename, matching `writeJson` on the MCP side — both processes read-modify-write
+    the same mailbox, and a torn write loses whichever update landed first.
+  - Runner output is captured as a bounded tail (2 MB, `FORK_LOOP_MAX_CAPTURE_CHARS`)
+    instead of growing with whatever the runner prints, and the entry records
+    `runner_output_chars` / `output_truncated`. Only the last 2000 characters were
+    ever stored, so holding the entire stream in memory was how a runaway runner
+    could exhaust the process that also hosts the planning session. The session id
+    is picked out of each chunk on the way past, because it is announced before the
+    tail is reached.
+  - `extractReceipt` takes the last receipt block. The launch prompt embeds a
+    receipt template under the same heading, so a runner that echoed its prompt had
+    the template stored as its result.
+  - `spawn_execution` no longer advertises `max_turns`. The runner's strict parser
+    aborts on `--max-turns`, so the cap could never be honoured.
+  - `receipt-gate` gates as intended. Pass/fail markers are word-bounded
+    (`bypass`/`failure`/`passenger` no longer read as verdicts), fields are anchored
+    to the contract's field list (a criteria entry shaped like `- AC1: …` no longer
+    truncates the Acceptance criteria block), and Gate 6 compares against
+    `--checkout` instead of the validator's own repository.
+  - `sync-upstream.sh` guards what it claims to. The old check asked whether the
+    merge base descends from `upstream/main` — true by construction, so it could
+    never fire. It now refuses unrelated histories and warns when the baseline
+    recorded in `README.md` stops being an ancestor (the signature of an upstream
+    rewrite), and a `trap` aborts and restores the checkout on a rebase conflict
+    instead of leaving it mid-rebase with no message.
+  - Version identity is checked where it is written: `sync-plugin-version.mjs` now
+    covers the README fork badge as well as the plugin manifests, and `npm run
+version` regenerates the Codex payload so a version PR cannot ship a drifted
+    mirror.
+  - New guards in `verify:all`: `agents-md-gate.mjs` (AGENTS.md must be a real
+    pointer, not a symlink materialised into nine bytes) and `transport-gate.mjs`
+    (the transport registry in `contracts/transports.json` and the detection list
+    in `execute-spec-in-fork` must agree). `verify.mjs` also refuses a `*.test.mjs`
+    that asserts nothing, which is how the fork-loop mailbox suite stayed green
+    while it tested nothing at all.
+
+- [`fdacd60`](https://github.com/opsbli/sam-skills/commit/fdacd60827cfeffa078e514966cca70059babe61) - Guardrail and contract hardening from a repo-wide skills audit.
+
+  - `spec-executor` becomes user-invoked. Nothing may start an execution on the
+    model's own initiative: firing it inside the planning thread is the failure
+    the README already flags as the most common way to miss the fork, and the
+    single user-facing step in every route (a pasted `SPEC READY`, a Messenger
+    Ask, a manual `/spec-executor`) stays exactly as it was.
+  - The receipt contract now lives in `contracts/receipt-v2.json`. `receipt-gate`
+    derives its gates, error codes, and Conclusion vocabulary from it, and
+    `--check` walks 14 landing points — rejecting any stale
+    `spec-executor-receipt/vN`, the retired two-word `partially completed`
+    outcome that no gate would ever have admitted, and a half-finished version
+    bump. Delivery documents became optional landing points, so archiving them no
+    longer breaks the validator.
+  - `to-goal` reaches `/goal-crafter` by invocation instead of reading
+    `../goal-crafter/SKILL.md`, which is the dependency style
+    `.agents/invocation.md` rules out. `to-goal`, `harvest`, and
+    `project-standards` descriptions drop model-trigger phrasing now that all
+    three are user-invoked.
+  - Repo tooling: `npm run verify` aggregates every read-only guard and runs in
+    CI and the pre-push hook; `contracts/fork-authorship.json` is the single
+    source for the fork-authored list, so `project-standards` and `harvest` stop
+    being audited as inherited skills; `append-only-gate.mjs` protects the
+    telemetry ledgers; `AGENTS.md` is a real pointer instead of nine bytes of
+    literal text; and `build-codex-plugin.mjs` reproduces the whole committed
+    payload — including the MCP block and Stop hook — so regenerating it can no
+    longer strip the Codex plugin's transport while turning `--check` green.
+
+- [`6518d68`](https://github.com/opsbli/sam-skills/commit/6518d686e4726031288ec975caf83f199e553fb1) - Add the harvest skill (telemetry ledgers -> skill-revision proposals, human-approved) and the minimal eval set (8 golden tasks over the core pipeline, scoreboard, draft-proposal loop). Close the knowledge-recovery loop and make the attractor claim measurable.
+
+- [`4f202ed`](https://github.com/opsbli/sam-skills/commit/4f202eda221555a03ed887e607b69b58670752e4) - Add the stack-playbooks layer to project-standards: new STACK-PLAYBOOKS.md (43 lines — per-stack playbook guidance the audit mode references), a corresponding SKILL.md section (+62 lines wiring playbooks into the audit/update flow), and agents/openai.yaml metadata for the Codex adapter. This is a deliberate fork feature: upstream has no stack-playbook concept; the fork's project-standards audit needs stack-specific rules to stay checkable rather than aspirational.
+
 ## Unreleased
 
 ### Patch Changes
