@@ -40,9 +40,19 @@ When the `fork-loop` MCP server is connected and the workspace's Stop hook is co
 
 1. **Spawn.** Call `spawn_execution` with the complete `SPEC READY` block as `spec_ready`, the workspace path as `checkout`, the current session id as `planner_session`, and a short non-sensitive `topic`. The service machine-locks the checkout (the single-active-execution-thread guard becomes mechanical — a second spawn fails naming the holder) and launches the headless runner. The call returns as soon as the runner has started, with `status: "running"` and a `task_id` — it deliberately does **not** wait for the run, so the exit code and the receipt are not in the tool result. They arrive with the mailbox entry, which is what step 2 is about.
 2. **Keep using the planning session.** Do not block or idle. The receipt is delivered by the Stop hook between turns: it injects the receipt as `additionalContext` and requests continuation. Treat the injected `[fork-loop]` block as the receipt arrival — jump straight to the six gates and the telemetry harvest below.
-3. **Settle.** After the six gates pass and a non-`none` `Docs delta` is settled through `/domain-modeling`, call `ack_receipt` with the injected `task_id` — that releases the checkout lock. Call `fail_receipt` instead when validation fails. If a runner is confirmed dead with no receipt arriving, `release_execution` is the recovery path; never spawn a second execution while the lock stands.
+3. **Settle.** After the six gates pass and a non-`none` `Docs delta` is settled through `/domain-modeling`, call `ack_receipt` with the injected `task_id` — that releases the checkout lock. Call `fail_receipt` instead when validation fails. If a runner is confirmed dead with no receipt arriving, `release_execution` is the recovery path. A run that is still alive but unwanted is `cancel_execution`'s job, not `release_execution`'s: dropping a live run's lock does not stop the run, it only admits a second execution onto the same checkout — so `release_execution` refuses that case and names `cancel_execution` instead. Never spawn a second execution while the lock stands.
 
 The headless runner receives the `SPEC READY` contract, not the grill history — the same contract-level inheritance as the manual runbook. If the MCP server or the Stop hook is missing, fall back to the manual runbook below; do not simulate either half of the transport.
+
+## Watch a long run
+
+A runner can take up to 90 minutes, and `spawn_execution` returns as soon as it starts — deliberately, so the planning turn is never held. The cost is a window with no receipt; check in rather than waiting blind, because a runner that is working and a runner that died on launch are otherwise indistinguishable until the timeout.
+
+- `check_status{checkout}` — one call: the task list (every run this checkout knows about, joined across the lock, the run journal and the mailbox) and the pipeline (planned work under `.scratch/`, including what has not started), then the derived phase, elapsed time, the lock holder plus whether the supervisor and runner processes are alive, the files touched in the last hour, the runner log tail, and the mailbox.
+- `node scripts/fork-loop-mcp/status.mjs --checkout <checkout>` — the same report in a terminal. `--watch` keeps it live, `--scan <dir>` covers several checkouts, `--require-idle` exits 3 when work is in flight.
+- `node scripts/fork-loop-mcp/dashboard.mjs --checkout <checkout>` — the web board, live on `127.0.0.1:7788`; `--snapshot <file>` writes a static page that can be published.
+
+Missing liveness evidence reads as `unknown`, never `alive` — an unrecorded runner pid is not a healthy run, and the report says so rather than guessing. A task's phase is derived from the same signals at both levels, so the board's headline and the task row under it cannot contradict each other.
 
 ## Codex App route (Messenger)
 

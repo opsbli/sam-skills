@@ -6,7 +6,7 @@
 // pipeline it was supposed to protect went untested.
 //
 // What it pins down now:
-//   protocol     — JSON-RPC handshake, exactly five tools, unknown tool is an error
+//   protocol     — JSON-RPC handshake, exactly seven tools, unknown tool is an error
 //   mailbox      — session filtering, delivery, exactly-once, persisted state
 //   settle       — ack/fail scope the lock release to the task that holds it
 //   lock         — refusal, no-holder refusal, orphan grace, scoped release
@@ -292,12 +292,14 @@ test("initialize advertises the fork-loop-mcp server on protocol 2024-11-05", as
   assert.equal(result.protocolVersion, "2024-11-05");
 });
 
-test("tools/list exposes exactly the five pipeline tools", async () => {
+test("tools/list exposes exactly the seven pipeline tools", async () => {
   const result = await main.rpc("tools/list", {});
   const names = result.tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
     "ack_receipt",
+    "cancel_execution",
     "check_mailbox",
+    "check_status",
     "fail_receipt",
     "release_execution",
     "spawn_execution",
@@ -528,19 +530,154 @@ test("release_execution drops the lock when the task_id matches", async () => {
   assert.equal(fs.existsSync(main.lockPath), false);
 });
 
-test("release_execution reports no lock rather than throwing, and force is idempotent", async () => {
+test("release_execution reports no lock rather than throwing, and force is idempotent", async (t) => {
   main.clearLock();
   const bare = await main.callTool("release_execution", { checkout });
   assert.equal(bare.payload.ok, true);
   assert.equal(bare.payload.released, false);
   assert.match(bare.payload.note, /no lock held/);
 
-  main.holdLock("holder-task");
+  // force drops a lock whose owner cannot be identified — here, one whose
+  // supervisor is demonstrably gone. A *live* owner is covered by the next test.
+  const pid = deadPid();
+  if (pid === null) {
+    t.skip("could not stage a dead process id for the force path");
+    return;
+  }
+  main.holdLock("dead-task", pid);
   const forced = await main.callTool("release_execution", { checkout, force: true });
   assert.equal(forced.payload.ok, true);
   assert.equal(forced.payload.released, true);
   assert.equal(forced.payload.forced, true);
   assert.equal(fs.existsSync(main.lockPath), false);
+});
+
+test("release_execution refuses to drop a lock whose execution is still alive", async () => {
+  // Dropping a live lock does not stop the run. It only lets a second execution
+  // start on the same checkout, which is the exact contract the lock exists to
+  // hold — so `force` is for a dead owner, and a live one has a real exit.
+  main.clearLock();
+  main.holdLock("live-task"); // defaults to this process's pid: alive
+  const { payload } = await main.callTool("release_execution", { checkout, force: true });
+
+  assert.equal(payload.ok, false);
+  assert.equal(payload.released, false);
+  assert.match(payload.error, /still alive/);
+  assert.match(payload.error, /cancel_execution/);
+  assert.equal(fs.existsSync(main.lockPath), true, "the lock must survive the refusal");
+  main.clearLock();
+});
+
+test("cancel_execution kills the recorded runner and releases the lock", async () => {
+  main.clearLock();
+  const runner = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60000)"], {
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  try {
+    fs.mkdirSync(main.lockPath, { recursive: true });
+    fs.writeFileSync(
+      path.join(main.lockPath, "task.json"),
+      JSON.stringify({
+        id: "runaway",
+        pid: process.pid, // supervisor: this test process, deliberately not killed
+        runner_pid: runner.pid,
+        startedAt: Date.now(),
+      }),
+    );
+
+    const { payload } = await main.callTool("cancel_execution", {
+      checkout,
+      task_id: "runaway",
+      reason: "test",
+    });
+
+    assert.equal(payload.ok, true, JSON.stringify(payload));
+    assert.equal(payload.cancelled, "runaway");
+    assert.equal(payload.runner_pid, runner.pid);
+    assert.equal(payload.lock_released, true);
+    assert.equal(fs.existsSync(main.lockPath), false, "cancel must release the lock");
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    let alive = true;
+    try {
+      process.kill(runner.pid, 0);
+    } catch {
+      alive = false;
+    }
+    assert.equal(alive, false, "the runner process must actually be gone");
+    // The supervisor recorded on the holder was this test process. Reaching this
+    // line at all is the assertion that cancel_execution spared it: had it been
+    // killed, the suite would have died with it.
+  } finally {
+    try {
+      runner.kill("SIGKILL");
+    } catch {
+      /* already gone */
+    }
+    main.clearLock();
+  }
+});
+
+test("cancel_execution refuses a task_id that does not hold the lock", async () => {
+  main.clearLock();
+  main.holdLock("current-task");
+  const { payload } = await main.callTool("cancel_execution", {
+    checkout,
+    task_id: "some-other-task",
+  });
+  assert.equal(payload.ok, false);
+  assert.match(payload.error, /held by current-task/);
+  assert.equal(fs.existsSync(main.lockPath), true);
+  main.clearLock();
+});
+
+test("check_status reports the phase, both pids and the activity it can see", async () => {
+  main.clearLock();
+  main.seedMailbox([]);
+  main.holdLock("status-task", process.pid);
+  const { payload } = await main.callTool("check_status", { checkout, log_tail_lines: 5 });
+
+  assert.equal(payload.ok, true);
+  assert.equal(payload.lock.present, true);
+  assert.equal(payload.lock.holder.task_id, "status-task");
+  assert.equal(payload.lock.supervisorAlive, true);
+  assert.equal(
+    payload.lock.runnerAlive,
+    null,
+    "an unrecorded runner pid must report unknown — never alive",
+  );
+  assert.ok(
+    ["running", "stalled"].includes(payload.phase),
+    `unexpected phase ${payload.phase}`,
+  );
+  assert.equal(Array.isArray(payload.activity.files), true);
+  assert.equal(Array.isArray(payload.gitDirty) || payload.gitDirty === null, true);
+  main.clearLock();
+});
+
+test("check_status calls a dead runner with a live supervisor recoverable", async (t) => {
+  const pid = deadPid();
+  if (pid === null) {
+    t.skip("could not stage a dead process id");
+    return;
+  }
+  main.clearLock();
+  fs.mkdirSync(main.lockPath, { recursive: true });
+  fs.writeFileSync(
+    path.join(main.lockPath, "task.json"),
+    JSON.stringify({ id: "runner-died", pid: process.pid, runner_pid: pid, startedAt: Date.now() }),
+  );
+
+  const { payload } = await main.callTool("check_status", { checkout });
+
+  assert.equal(payload.lock.runnerAlive, false);
+  assert.equal(
+    payload.phase,
+    "settling",
+    "a runner that just died is inside the recording grace, not yet a leak",
+  );
+  main.clearLock();
 });
 
 // --- full spawn cycle against a stub runner ---------------------------------

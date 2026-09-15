@@ -25,7 +25,9 @@
     "gate:coupling": "node scripts/test-coupling-gate.mjs",
     "gate:slice": "node scripts/tdd-slice-gate.mjs",
     "gate:append-only": "node scripts/append-only-gate.mjs",
-    "test:mailbox-cycle": "node --test scripts/fork-loop-mcp/test/mailbox-cycle.test.mjs"
+    "test:mailbox-cycle": "node --test scripts/fork-loop-mcp/test/mailbox-cycle.test.mjs",
+    "fork-loop:status": "node scripts/fork-loop-mcp/status.mjs",
+    "fork-loop:dashboard": "node scripts/fork-loop-mcp/dashboard.mjs"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",

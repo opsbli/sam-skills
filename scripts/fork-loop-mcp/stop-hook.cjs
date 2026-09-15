@@ -44,8 +44,33 @@ function findCheckout(input) {
   return null;
 }
 
+/**
+ * The mailbox path, resolved the same way the MCP server resolves it.
+ *
+ * FORK_LOOP_STATE_DIR has to be honoured here as well. With an override the
+ * mailbox lives outside the checkout, so the upward search above finds no
+ * anchor — and the hook would go permanently silent while the server kept
+ * writing receipts nobody ever delivered.
+ */
+function stateDir(checkout) {
+  return process.env.FORK_LOOP_STATE_DIR || path.join(checkout, '.zcode', 'fork-loop');
+}
+
 function mailboxFile(checkout) {
-  return path.join(checkout, '.zcode', 'fork-loop', 'mailbox.json');
+  return path.join(stateDir(checkout), 'mailbox.json');
+}
+
+/** The anchored search first; under an override, the directory we were handed. */
+function resolveCheckout(input) {
+  const anchored = findCheckout(input);
+  if (anchored) return anchored;
+  if (!process.env.FORK_LOOP_STATE_DIR) return null;
+  const start =
+    (input && input.cwd) ||
+    process.env.ZCODE_PROJECT_DIR ||
+    process.env.CLAUDE_PROJECT_DIR ||
+    process.cwd();
+  return path.resolve(start);
 }
 
 function main() {
@@ -55,7 +80,7 @@ function main() {
   } catch {
     process.exit(0); // unparseable hook input: stay silent rather than fail the run
   }
-  const checkout = findCheckout(input);
+  const checkout = resolveCheckout(input);
   if (!checkout) process.exit(0);
 
   let box;
@@ -69,8 +94,13 @@ function main() {
   // throws blocks the very Stop event it exists to serve.
   if (!box || !Array.isArray(box.receipts)) process.exit(0);
   const sessionId = input.session_id || input.sessionId || process.env.CLAUDE_SESSION_ID || null;
+  // An unidentified session must not be read as "anyone". The runner session
+  // inherits this same Stop hook, so a wildcard match would hand the planner's
+  // receipt to whichever session stopped first — a silent mis-delivery that
+  // looks exactly like a successful one. A receipt with no recorded planner
+  // session is the only one an unidentified hook may take.
   const mail = box.receipts.find(
-    (r) => r.state === 'pending' && (!sessionId || !r.planner_session || r.planner_session === sessionId)
+    (r) => r.state === 'pending' && (r.planner_session ? r.planner_session === sessionId : true)
   );
   if (!mail) process.exit(0);
 

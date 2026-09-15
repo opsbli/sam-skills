@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>fork-loop 执行看板</title>
+<style>
+  :root {
+    --bg: #14161a;
+    --panel: #1c1f24;
+    --panel-2: #21252b;
+    --line: #2c3138;
+    --ink: #e8eaed;
+    --muted: #9aa3ad;
+    --dim: #6c757e;
+    --accent: #d7f24e;
+    --warn: #f0a13a;
+    --bad: #ef5f5f;
+    --ok: #55c98a;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  header {
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    align-items: baseline;
+  }
+  h1 { font-size: 16px; margin: 0; letter-spacing: .02em; }
+  .path { color: var(--muted); font-family: var(--mono); font-size: 12px; word-break: break-all; }
+  .spacer { flex: 1 1 auto; }
+  .meta { color: var(--dim); font-size: 12px; font-family: var(--mono); }
+  main { padding: 18px 22px 40px; display: grid; gap: 16px; max-width: 1180px; }
+  .row { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .card h2 {
+    margin: 0 0 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; font-family: var(--mono); word-break: break-all; }
+  .pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid transparent;
+  }
+  .p-idle, .p-settled { background: #23272d; color: var(--muted); border-color: var(--line); }
+  .p-running { background: rgba(215,242,78,.14); color: var(--accent); border-color: rgba(215,242,78,.4); }
+  .p-receipt-ready, .p-awaiting-settlement { background: rgba(85,201,138,.14); color: var(--ok); border-color: rgba(85,201,138,.4); }
+  .p-stalled, .p-settling, .p-runner-exited, .p-lock-without-holder, .p-orphaned, .p-unknown {
+    background: rgba(240,161,58,.14); color: var(--warn); border-color: rgba(240,161,58,.4);
+  }
+  .p-bad { background: rgba(239,95,95,.14); color: var(--bad); border-color: rgba(239,95,95,.4); }
+  .big { font-size: 26px; font-family: var(--mono); font-weight: 600; letter-spacing: .02em; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 5px 8px 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+  td.mono, .mono { font-family: var(--mono); }
+  td.rel { color: var(--muted); white-space: nowrap; }
+  pre {
+    margin: 0;
+    background: #0f1114;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    max-height: 340px;
+    overflow: auto;
+    font-family: var(--mono);
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: #cfd4da;
+  }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .d-alive { background: var(--ok); }
+  .d-dead { background: var(--bad); }
+  .d-unknown { background: var(--warn); }
+  .muted { color: var(--muted); }
+  .dim { color: var(--dim); }
+  .empty { padding: 34px 20px; text-align: center; color: var(--muted); }
+  .empty strong { display: block; color: var(--ink); font-size: 15px; margin-bottom: 6px; }
+  .note { color: var(--dim); font-size: 12px; margin-top: 8px; }
+  .snapshot-badge { color: var(--warn); font-size: 12px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>fork-loop 执行看板</h1>
+  <span class="path" id="checkout">—</span>
+  <span class="spacer"></span>
+  <span class="meta" id="refreshed">—</span>
+  <span class="meta" id="live"></span>
+</header>
+<main>
+  <section class="card">
+    <div class="bar">
+      <span class="pill" id="phase">—</span>
+      <span class="big" id="elapsed">—</span>
+      <span class="muted" id="elapsed-label">已运行</span>
+      <span class="spacer"></span>
+      <span class="meta" id="head"></span>
+    </div>
+    <div id="task" class="kv"></div>
+  </section>
+
+  <section class="card">
+    <h2>任务列表（<span id="tasks-count">0</span>）</h2>
+    <div id="tasks"></div>
+    <div class="note" id="tasks-note"></div>
+  </section>
+
+  <section class="card">
+    <h2>流水线 · 计划中的工作（<span id="pipeline-count">0</span>）</h2>
+    <div id="pipeline"></div>
+    <div class="note" id="pipeline-note"></div>
+  </section>
+
+  <section class="card">
+    <h2>结算 · 最近一份回执</h2>
+    <div id="settlement"></div>
+    <div class="note" id="gates"></div>
+  </section>
+
+  <section class="card">
+    <h2>遥测台账</h2>
+    <div id="telemetry"></div>
+    <div id="friction"></div>
+    <div class="note" id="telemetry-note"></div>
+  </section>
+
+  <div class="row">
+    <section class="card">
+      <h2>锁 / 进程</h2>
+      <div id="lock" class="kv"></div>
+    </section>
+    <section class="card">
+      <h2>工作树（<span id="dirty-count">0</span>）</h2>
+      <div id="dirty"></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>最近改动文件（<span id="activity-count">0</span>，窗口 <span id="activity-window">—</span>）</h2>
+    <div id="activity"></div>
+  </section>
+
+  <section class="card">
+    <h2>runner 日志尾段</h2>
+    <pre id="log">—</pre>
+  </section>
+
+  <section class="card" id="failures-card" hidden>
+    <h2>failures.log</h2>
+    <pre id="failures"></pre>
+  </section>
+</main>
+
+<script id="bootstrap" type="application/json">__FORK_LOOP_BOOTSTRAP__</script>
+<script>
+(function () {
+  var bootstrap = { report: null, snapshot: false };
+  try {
+    bootstrap = JSON.parse(document.getElementById('bootstrap').textContent || '{}');
+  } catch (e) { /* snapshot payload unreadable: fall back to polling */ }
+
+  var PHASE = {
+    idle: '空闲', running: '执行中', settling: '收尾中（runner 已退出，待记回执）',
+    stalled: '停滞（>20m 无新信号）',
+    'receipt-ready': '回执待处理', 'awaiting-settlement': '等待归档', settled: '已结算',
+    'finished-no-receipt': '已结束（无可解析回执）', cancelled: '已取消', failed: '失败',
+    'runner-exited': 'runner 已退出（待记回执）', 'lock-without-holder': '锁存在但无持有者',
+    orphaned: '监督进程已死（锁可回收）', unknown: '状态未知'
+  };
+  var PHASE_CLASS = {
+    running: 'p-running', settling: 'p-settling', stalled: 'p-stalled',
+    'receipt-ready': 'p-receipt-ready', 'awaiting-settlement': 'p-awaiting-settlement',
+    settled: 'p-settled', cancelled: 'p-bad', failed: 'p-bad',
+    'finished-no-receipt': 'p-bad', orphaned: 'p-orphaned',
+    'runner-exited': 'p-runner-exited', 'lock-without-holder': 'p-lock-without-holder',
+    idle: 'p-idle', unknown: 'p-unknown'
+  };
+  var LOCK_STATE = {
+    free: '无锁', active: '活跃', settling: '收尾中', 'runner-gone': 'runner 已退出',
+    orphaned: '监督进程已死', 'no-holder': '无持有者记录', unknown: '未知'
+  };
+  // Pipeline stages: the execution vocabulary where they overlap, plus the
+  // three stages that exist only before anything has run.
+  var STAGE = {
+    executing: '执行中', 'receipt-ready': '回执待处理', 'awaiting-settlement': '等待归档',
+    executed: '已执行', ready: '就绪待执行', ticketed: '已拆分', spec: '已成型', doc: '规划文档'
+  };
+  var STAGE_CLASS = {
+    executing: 'p-running', 'receipt-ready': 'p-receipt-ready',
+    'awaiting-settlement': 'p-awaiting-settlement', executed: 'p-settled',
+    ready: 'p-awaiting-settlement', ticketed: 'p-idle', spec: 'p-idle', doc: 'p-idle'
+  };
+  function esc(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function dur(ms) {
+    // Seconds are never dropped. A duration frozen at `1h18m` for a whole
+    // minute is indistinguishable from a board that stopped updating — which is
+    // exactly how a live run got read as "the duration never updates".
+    if (!isFinite(ms) || ms <= 0) return '0s';
+    var s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+    if (h) return h + 'h' + m + 'm' + r + 's';
+    if (m) return m + 'm' + r + 's';
+    return r + 's';
+  }
+  function rel(ms) {
+    if (!ms) return '—';
+    var d = Date.now() - ms;
+    return d < 0 ? '—' : dur(d) + ' 前';
+  }
+  function aliveDot(v) {
+    var cls = v === true ? 'd-alive' : v === false ? 'd-dead' : 'd-unknown';
+    var label = v === true ? '存活' : v === false ? '已退出' : '未知';
+    return '<span class="dot ' + cls + '"></span>' + label;
+  }
+  function kv(pairs) {
+    return '<dl class="kv">' + pairs.map(function (p) {
+      return '<dt>' + esc(p[0]) + '</dt><dd>' + p[1] + '</dd>';
+    }).join('') + '</dl>';
+  }
+  function table(headers, rows) {
+    if (!rows.length) return '<div class="muted">（无）</div>';
+    return '<table><thead><tr>' + headers.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') +
+      '</tr></thead><tbody>' + rows.join('') + '</tbody></table>';
+  }
+
+  var current = null;
+  // The live validator run is fetched once per task: it spawns a process, and a
+  // written receipt never changes. Everything else here comes from the poll.
+  var gateCache = {};
+
+  function paintGates(data) {
+    var box = document.getElementById('gates');
+    if (!data || !data.ran) {
+      box.textContent = '逐门校验未运行：' + ((data && data.reason) || '未知原因');
+      return;
+    }
+    if (!data.gates || !data.gates.length) {
+      box.textContent = '校验器没有输出可解析的门结果' + (data.raw && data.raw.length ? '：' + data.raw.join(' / ') : '');
+      return;
+    }
+    var pills = data.gates.map(function (g) {
+      var cls = g.status === 'PASS' ? 'p-settled' : g.status === 'FAIL' ? 'p-bad' : 'p-idle';
+      return '<span class="pill ' + cls + '">Gate ' + g.num + ' ' + esc(g.status) + '</span>';
+    }).join('');
+    var notPassing = data.gates.filter(function (g) { return g.status !== 'PASS'; }).map(function (g) {
+      return '<div class="muted" style="font-size:12.5px">Gate ' + g.num + ' ' + esc(g.label) + '：' + esc(g.detail || g.status) + '</div>';
+    }).join('');
+    box.innerHTML = '<div class="bar" style="margin-bottom:6px"><span class="muted">逐门机器校验（receipt-gate.mjs --checkout 本次工作树）</span>' +
+      pills + '</div>' + notPassing;
+  }
+
+  function renderGates(taskId) {
+    var box = document.getElementById('gates');
+    if (!taskId) { box.textContent = ''; return; }
+    if (gateCache[taskId]) { paintGates(gateCache[taskId]); return; }
+    box.textContent = '逐门机器校验中…';
+    fetch('/api/validate?task=' + encodeURIComponent(taskId), { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) { gateCache[taskId] = data; paintGates(data); })
+      .catch(function () { box.textContent = '逐门校验不可用（/api/validate 未响应）'; });
+  }
+
+  function render(report) {
+    current = report;
+    if (!report) return;
+    document.getElementById('checkout').textContent = report.checkout || '—';
+    document.getElementById('refreshed').textContent = '刷新于 ' + new Date(report.generatedAt).toLocaleTimeString();
+    document.getElementById('head').textContent = report.head ? 'HEAD ' + report.head : '';
+
+    var phase = report.phase || 'unknown';
+    var pill = document.getElementById('phase');
+    pill.className = 'pill ' + (PHASE_CLASS[phase] || 'p-unknown');
+    pill.textContent = PHASE[phase] || phase;
+
+    document.getElementById('task').innerHTML = report.run ? kv([
+      ['当前任务', esc(report.run.task_id)],
+      ['主题', esc(report.run.topic || '—')],
+      ['状态', esc(report.run.status)],
+      ['回执', report.run.receipt_present ? '已提取' : '未提取'],
+      ['runner_exit', esc(report.run.runner_exit === null || report.run.runner_exit === undefined ? 'n/a' : report.run.runner_exit)],
+      ['待归档回执', report.pendingReceipts ? '<strong>' + report.pendingReceipts + '</strong>' : '0'],
+      ['无回执结束', report.noReceipt ? '<strong>' + report.noReceipt + '</strong>' : '0'],
+      ['待回收锁', report.needsRecovery ? '<strong>' + report.needsRecovery + '</strong>' : '0'],
+      ['备注', esc(report.run.note || '—')]
+    ]) : kv([
+      ['当前任务', '<span class="muted">state.json 中没有记录</span>'],
+      ['待归档回执', report.pendingReceipts ? '<strong>' + report.pendingReceipts + '</strong>' : '0'],
+      ['无回执结束', report.noReceipt ? '<strong>' + report.noReceipt + '</strong>' : '0'],
+      ['待回收锁', report.needsRecovery ? '<strong>' + report.needsRecovery + '</strong>' : '0'],
+      ['说明', '<span class="muted">该运行可能由旧版 server 启动，或从未启动过执行</span>']
+    ]);
+
+    var lock = report.lock || {};
+    var recovery = (report.tasks || []).filter(function (t) { return t.needs_recovery; }).length;
+    document.getElementById('lock').innerHTML = lock.present ? kv([
+      ['锁状态', esc(LOCK_STATE[lock.state] || lock.state)],
+      ['持有者', esc((lock.holder && lock.holder.task_id) || 'unknown')],
+      ['监督进程', '<span class="mono">' + esc((lock.holder && lock.holder.supervisor_pid) || 'n/a') + '</span> ' + aliveDot(lock.supervisorAlive)],
+      ['runner 进程', '<span class="mono">' + esc((lock.holder && lock.holder.runner_pid) || '未记录') + '</span> ' + aliveDot(lock.runnerAlive)],
+      ['锁龄', esc(dur(lock.ageMs))]
+    ].concat(recovery ? [['⚠ 待回收', '执行已结束但锁仍在 —— 该运行没有回执，永远不会有人 ack 它。用 fail_receipt 或 release_execution 释放，否则下一个执行会被挡住。']] : [])
+    ) : '<div class="muted">无锁 — 没有活跃执行</div>';
+
+    // The task list is the answer to "what has this checkout been doing?" — one
+    // row per task, joined across the lock, the run journal and the mailbox, so
+    // a task appears here even when only one of the three knows about it.
+    var tasks = report.tasks || [];
+    document.getElementById('tasks-count').textContent = tasks.length;
+    document.getElementById('tasks').innerHTML = tasks.length
+      ? table(
+          ['状态', '任务', '主题', '时长', '最后信号', '开始', '回执', 'exit', '来源'],
+          tasks.slice(0, 40).map(function (t) {
+            var cls = PHASE_CLASS[t.phase] || 'p-unknown';
+            var receipt = t.receipt_state
+              ? esc(t.receipt_state) + (t.receipt_present ? '' : '（无正文）')
+              : (t.receipt_present ? '有' : '<span class="muted">无</span>');
+            return '<tr' + (t.in_flight ? ' style="background:rgba(215,242,78,.05)"' : '') + '>' +
+              '<td><span class="pill ' + cls + '">' + esc(PHASE[t.phase] || t.phase) + '</span></td>' +
+              '<td class="mono">' + esc(t.task_id) + '</td>' +
+              '<td>' + esc(t.topic || '—') + '</td>' +
+              '<td class="rel" data-elapsed data-started="' + esc(t.started_at || '') + '" data-finished="' + esc(t.finished_at || '') + '">' + esc(dur(t.elapsedMs)) + '</td>' +
+              '<td class="rel">' + esc(rel(t.last_signal_at)) + '</td>' +
+              '<td class="rel">' + (t.started_at ? esc(new Date(t.started_at).toLocaleString()) : '—') + '</td>' +
+              '<td>' + receipt + '</td>' +
+              '<td class="mono">' + esc(t.runner_exit === null || t.runner_exit === undefined ? 'n/a' : t.runner_exit) + '</td>' +
+              '<td class="rel">' + esc((t.sources || []).join('+')) + '</td>' +
+              '</tr>';
+          })
+        )
+      : '<div class="muted">还没有任何任务记录</div>';
+    document.getElementById('tasks-note').textContent = tasks.length
+      ? '来源说明：lock = 当前持有锁的执行；journal = state.json 记录；mailbox = 回执生命周期。三者合并，所以只被其中一处记录的任务也会出现在这里。'
+      : '';
+
+    var pipe = report.pipeline || { present: false, items: [] };
+    var pipeItems = pipe.items || [];
+    document.getElementById('pipeline-count').textContent = pipeItems.length;
+    document.getElementById('pipeline').innerHTML = !pipe.present
+      ? '<div class="muted">该 checkout 没有 .scratch 目录（本地 tracker 约定 .scratch/&lt;feature&gt;/spec.md + issues/）</div>'
+      : pipeItems.length
+        ? table(['阶段', '文件', '标题', '特征', '改动于'], pipeItems.slice(0, 40).map(function (it) {
+            return '<tr>' +
+              '<td><span class="pill ' + (STAGE_CLASS[it.stage] || 'p-idle') + '">' + esc(STAGE[it.stage] || it.stage) + '</span></td>' +
+              '<td class="mono">' + esc(it.path) + '</td>' +
+              '<td>' + esc(it.title) + '</td>' +
+              '<td class="rel">' + esc(it.feature) + '</td>' +
+              '<td class="rel">' + esc(rel(it.modifiedAt)) + '</td>' +
+              '</tr>';
+          }))
+        : '<div class="muted">.scratch 下没有 markdown 规划件</div>';
+    document.getElementById('pipeline-note').textContent = pipe.present
+      ? '阶段来自规划件本身（有没有 spec / tickets / SPEC READY 块）与命名了它的执行（SPEC READY 的 Source、回执的 Spec source）。未开始的工作也在这里——不必等它跑起来。'
+      : '';
+
+    // --- settlement ---------------------------------------------------------
+    var st = report.settlement;
+    var stEl = document.getElementById('settlement');
+    if (!st) {
+      stEl.innerHTML = '<div class="muted">没有回执可结算（最近一次运行没有产出，或还没有运行过）</div>';
+      document.getElementById('gates').textContent = '';
+    } else if (!st.summary || !st.summary.present) {
+      stEl.innerHTML = kv([
+        ['任务', esc(st.task_id)],
+        ['队列状态', esc(st.mailbox_state || 'n/a')],
+        ['回执', '<span class="muted">无正文 —— 归档门无法执行</span>']
+      ]) + (st.failure_tail
+        ? '<pre style="margin-top:10px;max-height:170px">' + esc(st.failure_tail) + '</pre>'
+        : '');
+      document.getElementById('gates').textContent = '';
+    } else {
+      var sm = st.summary.metrics || {};
+      stEl.innerHTML = kv([
+        ['任务', esc(st.task_id)],
+        ['队列状态', esc(st.mailbox_state || 'n/a')],
+        ['结论', '<strong>' + esc(st.summary.conclusion || '（不合法）') + '</strong>'],
+        ['验收证据', esc((st.summary.criteria_evidenced || 0) + '/' + (st.summary.criteria_total || 0))],
+        ['Docs delta', st.summary.docs_delta_none ? 'none' : esc((st.summary.docs_delta_count || 0) + ' 行')],
+        ['归档门（回执记录）', esc(sm.archive_gates || 'n/a') + '　失败数=' + esc(sm.archive_gate_failures || 'n/a')],
+        ['路由 / grill 轮数', esc(sm.route || 'n/a') + ' / ' + esc(sm.grill_rounds || 'n/a')],
+        ['skill-friction', esc(sm.skill_friction || 'n/a')]
+      ])
+        + (st.summary.problems && st.summary.problems.length
+          ? '<div class="bar" style="margin-top:10px"><span class="pill p-bad">结构问题 ' + st.summary.problems.length + '</span></div>' +
+            '<div class="muted" style="font-size:12.5px">' + st.summary.problems.map(esc).join('<br>') + '</div>'
+          : '<div class="bar" style="margin-top:10px"><span class="pill p-settled">结构检查通过</span></div>')
+        + (st.summary.docs_delta_lines && st.summary.docs_delta_lines.length
+          ? '<div style="margin-top:10px"><span class="muted">Docs delta —— 规划线程须沉淀进 CONTEXT.md / ADR：</span>' +
+            '<pre style="margin-top:6px;max-height:170px">' + esc(st.summary.docs_delta_lines.join('\n')) + '</pre></div>'
+          : '');
+      renderGates(st.task_id);
+    }
+
+    // --- telemetry ----------------------------------------------------------
+    var tel = report.telemetry || {};
+    var tm = tel.metrics || { present: false };
+    var tf = tel.friction || { present: false };
+    var tEl = document.getElementById('telemetry');
+    if (!tm.present) {
+      tEl.innerHTML = '<div class="muted">该 checkout 没有 docs/metrics.md（回执归档时由规划线程追加）</div>';
+      document.getElementById('friction').innerHTML = '';
+    } else if (!tm.rows) {
+      tEl.innerHTML = '<div class="muted">docs/metrics.md 还没有数据行</div>';
+      document.getElementById('friction').innerHTML = '';
+    } else {
+      var chips = [
+        ['行数', tm.rows],
+        ['门放行', tm.gate_pass + '/' + tm.rows],
+        ['门失败累计', tm.gate_failures],
+        ['证据累计', tm.criteria_evidenced || 'n/a'],
+        ['摩擦非 none', tm.friction_rows],
+        ['grill 轮数', tm.grill_rounds]
+      ].map(function (pair) {
+        return '<span class="pill ' + (pair[0] === '门失败累计' && pair[1] ? 'p-bad' : 'p-idle') + '">' +
+          esc(pair[0]) + ' ' + esc(pair[1]) + '</span>';
+      }).join('');
+      var weeks = (tm.weeks || []).map(function (w) { return esc(w.week) + '×' + w.rows; }).join('  ');
+      tEl.innerHTML = '<div class="bar" style="margin-bottom:10px">' + chips + '</div>' +
+        table(['日期', '来源', '路由', '归档门', '质量'], (tm.recent || []).map(function (r) {
+          return '<tr><td class="rel">' + esc(r.date) + '</td><td class="mono">' + esc(r.spec_source) + '</td>' +
+            '<td>' + esc(r.route) + '</td><td>' + esc(r.archive_gates) + '</td>' +
+            '<td>' + esc(r.quality || '（未填）') + '</td></tr>';
+        })) +
+        (weeks ? '<div class="note">周分布：' + weeks + '</div>' : '');
+      document.getElementById('friction').innerHTML = tf.present
+        ? (tf.entries
+          ? '<div style="margin-top:10px"><span class="muted">摩擦日志 ' + tf.entries + ' 条 · 按技能：' +
+            esc(Object.keys(tf.by_skill || {}).map(function (k) { return k + '×' + tf.by_skill[k]; }).join('  ')) + '</span>' +
+            '<pre style="margin-top:6px;max-height:160px">' +
+            esc((tf.recent || []).map(function (e) { return (e.date || '?') + '  ' + (e.skill || '?') + '  ' + (e.friction || ''); }).join('\n')) +
+            '</pre></div>'
+          : '<div class="muted" style="margin-top:10px">摩擦日志：无条目（= 无跨回执重复摩擦）</div>')
+        : '';
+    }
+    var rep = (tel.signals || {}).repeat_friction_skills || [];
+    document.getElementById('telemetry-note').textContent = rep.length
+      ? '⚠ 重复摩擦（≥2 次）：' + rep.join('、') + ' —— 这是 /project-standards audit 与 /harvest run 的输入。'
+      : (tm.present ? '门失败累计上升 → 回执契约在上游被违反；质量标签反复非 accurate → spec 质量本身是缺陷信号。' : '');
+
+    var dirty = report.gitDirty;
+    document.getElementById('dirty-count').textContent = dirty === null ? 'git 不可用' : dirty.length;
+    document.getElementById('dirty').innerHTML = dirty === null
+      ? '<div class="muted">git 不可用，无法核验工作树</div>'
+      : table(['改动'], dirty.slice(0, 25).map(function (line) {
+          return '<tr><td class="mono">' + esc(line) + '</td></tr>';
+        }));
+
+    var act = (report.activity && report.activity.files) || [];
+    document.getElementById('activity-count').textContent = act.length + (report.activity && report.activity.truncated ? '（截断）' : '');
+    document.getElementById('activity-window').textContent = dur((report.activity && report.activity.windowMs) || 0);
+    document.getElementById('activity').innerHTML = table(['文件', '大小', '改动于'], act.slice(0, 30).map(function (f) {
+      var rel_path = f.path.indexOf(report.checkout) === 0 ? f.path.slice(report.checkout.length + 1) : f.path;
+      return '<tr><td class="mono">' + esc(rel_path) + '</td><td class="mono">' + Math.round(f.size / 102.4) / 10 + 'KB</td>' +
+        '<td class="rel">' + esc(rel(f.mtimeMs)) + '</td></tr>';
+    }));
+
+    var log = document.getElementById('log');
+    if (report.logTail && report.logTail.lines && report.logTail.lines.length) {
+      log.textContent = report.logTail.lines.slice(-200).join('\n');
+      log.scrollTop = log.scrollHeight;
+    } else if (report.logTail) {
+      log.textContent = '（日志为空 — runner 尚未输出，或该运行未写日志）';
+    } else {
+      log.textContent = '（无日志文件 — 该运行由未写日志的 server 启动）';
+    }
+
+    var fail = report.failures || [];
+    document.getElementById('failures-card').hidden = fail.length === 0;
+    if (fail.length) document.getElementById('failures').textContent = fail.join('\n');
+  }
+
+  function tick() {
+    if (!current) return;
+    var base = current.elapsedMs || 0;
+    var since = Date.now() - (current.generatedAt || Date.now());
+    document.getElementById('elapsed').textContent = dur(base + since);
+    // Running rows tick locally rather than waiting for the next poll, so the
+    // clock an operator is staring at moves every second instead of every two.
+    var cells = document.querySelectorAll('[data-elapsed]');
+    for (var i = 0; i < cells.length; i++) {
+      var started = Number(cells[i].getAttribute('data-started'));
+      var finished = cells[i].getAttribute('data-finished');
+      if (!started || finished) continue;
+      cells[i].textContent = dur(Date.now() - started);
+    }
+  }
+
+  function poll() {
+    fetch('/api/state', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(render)
+      .catch(function () {
+        document.getElementById('live').innerHTML = '<span class="dim">连接中断，重试中…</span>';
+      });
+  }
+
+  if (bootstrap.report) render(bootstrap.report);
+  if (bootstrap.snapshot) {
+    document.getElementById('live').innerHTML = '<span class="snapshot-badge">快照（不自动刷新）</span>';
+  } else {
+    document.getElementById('live').innerHTML = '<span class="dim">实时 · 每 2s</span>';
+    poll();
+    setInterval(poll, 2000);
+  }
+  setInterval(tick, 1000);
+  tick();
+})();
+</script>
+</body>
+</html>

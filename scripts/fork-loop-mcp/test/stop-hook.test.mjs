@@ -208,3 +208,54 @@ test("the checkout is found by walking up from the hook's cwd", () => {
   assert.equal(res.status, 0, res.stderr);
   assert.match(res.stdout, /task-1/, "an upward search from a nested cwd must still find the mailbox");
 });
+
+// --- session identity -------------------------------------------------------
+
+test("a hook with no session id does not take a receipt addressed to someone else", () => {
+  // The runner session inherits this same Stop hook, so a missing session id
+  // must not be read as "anyone". A wildcard match here delivers the planner's
+  // receipt into the execution session — a mis-delivery that looks exactly like
+  // a successful one, because both end with the receipt gone from the mailbox.
+  const dir = makeCheckout();
+  writeBox(dir, { receipts: [entry({ planner_session: "sess_A" })] });
+
+  const res = runHook({ cwd: dir }, { cwd: dir });
+
+  assert.equal(res.status, 0, res.stderr);
+  assert.equal(res.stdout, "", "an unidentified hook must stay silent");
+  assert.equal(readBox(dir).receipts[0].state, "pending", "the receipt must still be waiting");
+});
+
+test("a receipt with no recorded planner session is still deliverable", () => {
+  // The one exception: nothing contradicts the delivery, so refusing it would
+  // strand the receipt for a run that never named a session.
+  const dir = makeCheckout();
+  writeBox(dir, { receipts: [entry({ planner_session: null })] });
+
+  const res = runHook({ cwd: dir }, { cwd: dir });
+
+  assert.equal(res.status, 0, res.stderr);
+  assert.match(res.stdout, /task-1/, "a session-less receipt has no session to mismatch");
+});
+
+test("FORK_LOOP_STATE_DIR moves the mailbox, and the hook follows it there", () => {
+  // The server resolves the state directory through the override; if the hook
+  // does not, it looks under the checkout, finds nothing, and goes permanently
+  // silent while receipts pile up unread.
+  const dir = makeCheckout(); // the normal location exists but stays empty
+  const stateDir = fs.mkdtempSync(path.join(root, "override-"));
+  fs.writeFileSync(
+    path.join(stateDir, "mailbox.json"),
+    JSON.stringify({ receipts: [entry()] }, null, 2),
+  );
+
+  const res = runHook(
+    { cwd: dir, session_id: "sess_A" },
+    { cwd: dir, env: { FORK_LOOP_STATE_DIR: stateDir } },
+  );
+
+  assert.equal(res.status, 0, res.stderr);
+  assert.match(res.stdout, /task-1/, "the hook must read the mailbox the server writes");
+  const box = JSON.parse(fs.readFileSync(path.join(stateDir, "mailbox.json"), "utf8"));
+  assert.equal(box.receipts[0].state, "delivered");
+});
