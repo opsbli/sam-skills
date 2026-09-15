@@ -457,6 +457,19 @@ git fetch --refetch --no-tags --force upstream main
 
 ---
 
+### 第十七轮：🟢 #43 —— receipt-gate 测试密闭化 + 用信封覆盖替代重复用例
+
+| 项目 | 状态 | 改动 | 验证证据 |
+|---|---|---|---|
+| **compliant fixture 内嵌宿主 git 状态（半密闭）** | ✅ | `runOn` / `runStdin` 各自创建受控 worktree 并以 `--checkout` 传入；需要漂移的测试**点名**它期望看到的文件 | `receipt-gate.test.mjs` **16/16**；套件不再依赖"从哪里启动、宿主 checkout 有多脏" |
+| **AC6 与 AC2–AC5 冗余** | ✅ | AC6 改为断言**JSON 信封**：每个拦截码恰好一条信封，且 `gate` / `severity` / `traceId` / `timestamp` 形状正确——这是 AC2–AC5 没有断言的机器可读契约 | `verify:all` **14/14** |
+
+**修复过程中抓到我自己的一个 bug**：`runOn` 总是注入自己的 `--checkout`，而 AC11 又通过 extraArgs 传第二个——参数解析取**第一个**出现的，于是 AC11 静默退化（Gate 6 对着干净的测试 worktree 放行了它本该拒绝的脏树）。已让 AC11 走 `opts.worktree` 这同一条路，AC5 / AC11 共用同一机制。
+
+**为什么值得**：泰莎在首轮就指出这个 fixture "必须在干净 git 仓、且运行期间无并发写入时才绿"——**而本轮的测试恰恰是在一个有 30+ 文件未提交的宿主仓里跑的**。密闭化之后，这套测试在任何宿主状态下结果一致。
+
+---
+
 ## 🏗️ 架构影响评估（Archi）
 
 ### 一个根因，六处症状：**「同一条规则被复写多份，且防漂移不接线」**
