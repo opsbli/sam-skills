@@ -38,6 +38,8 @@ The limit on this is the **[smart zone](https://www.aihero.dev/ai-coding-diction
 
 A starting situation that generates work, then merges onto the main flow.
 
+- **Product hands over a prototype link or UI screenshots** → **`/from-prototype`**. It captures the source, extracts requirement facts in plain business language — every inference tagged `[待确认]`, never guessed into shape — and writes a plan draft that ends with 3–6 top-level decision branches. Then merge onto the main flow at step 1: `/grill-with-docs` in a working directory, `/grill-me` without one; the draft's branches are the interview's opening questions. Intake only — it never interviews and never builds UI.
+
 - **Bugs and requests piling up** → **`/triage`**. It moves issues through triage roles and produces agent-ready issues. Run **`/to-goal`** on the selected ready issue, then execute it in a fresh session — or pick it up with **`/implement`** directly when the context is already clean.
 
   Triage is only for issues **you didn't create** — bug reports, incoming feature requests, anything that arrives raw. Tickets that `/to-tickets` produced are already agent-ready, so **don't triage them**. `/to-goal` consumes either kind of ready ticket without repeating triage or re-interviewing you.

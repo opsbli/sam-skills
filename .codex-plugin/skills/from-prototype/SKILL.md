@@ -1,6 +1,6 @@
 ---
 name: from-prototype
-description: Turn a product prototype — a link (Axure, Figma, Modao, MasterGo, Lanhu,即时设计, or any web page) or UI screenshots — into a structured plan draft that grill-me can interrogate. Use when the user shares a prototype link or design images and wants to start requirement planning, or says things like "产品给了原型", "根据这个原型梳理需求", or "turn this prototype into a plan". This is the intake step before grill-me; it produces the draft, it does not interview and it does not build UI.
+description: Turn a product prototype link or UI screenshots into a structured plan draft with decision branches — the intake step before grill-me. Produces the draft only; does not interview, does not build UI.
 disable-model-invocation: true
 ---
 

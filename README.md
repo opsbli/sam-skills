@@ -103,6 +103,7 @@ npx skills@latest add opsbli/sam-skills
 ### 第 1 步：把想法聊成 Spec（规划线程）
 
 ```text
+/from-prototype   ← （可选）产品给了原型链接/截图时先做 intake，产出需求草案
 /grill-me          ← 追问式访谈，把模糊想法逼成具体决策
 /to-spec           ← 冻结共识，发布 SPEC READY 到 issue tracker
 ```
@@ -406,7 +407,7 @@ agent：低于复杂度地板（单文件、机械、无产品决策），走轻
 
 MINI RECEIPT
 - what changed: README.md 1 处 to-gola → to-goal
-- validation run: npm run lint:skills → OK (32 promoted)
+- validation run: npm run lint:skills → OK (33 promoted)
 - worktree state: 仅 README.md 一行改动
 ```
 
@@ -477,11 +478,11 @@ MINI RECEIPT
 
 ## 技能地图
 
-当前发行版包含 32 个 promoted Skills：25 个随上游同步的工程与生产力 Skill，以及本 fork 新增的 [`to-goal`](./skills/engineering/to-goal/SKILL.md)、[`goal-crafter`](./skills/engineering/goal-crafter/SKILL.md)、[`spec-executor`](./skills/engineering/spec-executor/SKILL.md)、[`execute-spec-in-fork`](./skills/engineering/execute-spec-in-fork/SKILL.md)、[`roundtable`](./skills/engineering/roundtable/SKILL.md)、[`project-standards`](./skills/engineering/project-standards/SKILL.md)、[`harvest`](./skills/engineering/harvest/SKILL.md)。
+当前发行版包含 33 个 promoted Skills：25 个随上游同步的工程与生产力 Skill，以及本 fork 新增的 [`to-goal`](./skills/engineering/to-goal/SKILL.md)、[`goal-crafter`](./skills/engineering/goal-crafter/SKILL.md)、[`spec-executor`](./skills/engineering/spec-executor/SKILL.md)、[`execute-spec-in-fork`](./skills/engineering/execute-spec-in-fork/SKILL.md)、[`roundtable`](./skills/engineering/roundtable/SKILL.md)、[`project-standards`](./skills/engineering/project-standards/SKILL.md)、[`harvest`](./skills/engineering/harvest/SKILL.md)、[`from-prototype`](./skills/productivity/from-prototype/SKILL.md)。
 
 | 阶段 | 技能 |
 |---|---|
-| 规划 / 澄清 | [`grill-me`](./skills/productivity/grill-me/SKILL.md) · [`grilling`](./skills/productivity/grilling/SKILL.md) · [`grill-with-docs`](./skills/engineering/grill-with-docs/SKILL.md) · [`to-questionnaire`](./skills/productivity/to-questionnaire/SKILL.md) |
+| 规划 / 澄清 | [`from-prototype`](./skills/productivity/from-prototype/SKILL.md) · [`grill-me`](./skills/productivity/grill-me/SKILL.md) · [`grilling`](./skills/productivity/grilling/SKILL.md) · [`grill-with-docs`](./skills/engineering/grill-with-docs/SKILL.md) · [`to-questionnaire`](./skills/productivity/to-questionnaire/SKILL.md) |
 | 立项 / 拆解 | [`to-spec`](./skills/engineering/to-spec/SKILL.md) · [`to-tickets`](./skills/engineering/to-tickets/SKILL.md) · [`triage`](./skills/engineering/triage/SKILL.md) · [`wayfinder`](./skills/engineering/wayfinder/SKILL.md) |
 | 执行 / 交付 | [`spec-executor`](./skills/engineering/spec-executor/SKILL.md) · [`execute-spec-in-fork`](./skills/engineering/execute-spec-in-fork/SKILL.md) · [`to-goal`](./skills/engineering/to-goal/SKILL.md) · [`implement`](./skills/engineering/implement/SKILL.md) · [`tdd`](./skills/engineering/tdd/SKILL.md) · [`code-review`](./skills/engineering/code-review/SKILL.md) |
 | 知识与决策 | [`domain-modeling`](./skills/engineering/domain-modeling/SKILL.md) · [`project-standards`](./skills/engineering/project-standards/SKILL.md) · [`roundtable`](./skills/engineering/roundtable/SKILL.md) · [`codebase-design`](./skills/engineering/codebase-design/SKILL.md) · [`improve-codebase-architecture`](./skills/engineering/improve-codebase-architecture/SKILL.md) · [`harvest`](./skills/engineering/harvest/SKILL.md) |
