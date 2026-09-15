@@ -125,9 +125,14 @@ function normalizePath(p) {
   return p.trim().replace(/^"|"$/g, "").replace(/\\/g, "/").replace(/\/+$/, "");
 }
 
-function pathsFromWorktreeLines(value) {
+/**
+ * Paths out of `git status --porcelain` lines. The receipt's "Final worktree
+ * state" field uses the same shape, or plain paths, so one parser serves both
+ * the gate comparing receipt text and the one reading a real worktree.
+ */
+function porcelainPaths(text) {
   const paths = [];
-  for (const rawLine of value.split(/\r?\n/)) {
+  for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line) continue;
     const rename = line.match(/^.+\s->\s(.+)$/); // porcelain rename entry
@@ -148,6 +153,10 @@ function pathsFromWorktreeLines(value) {
   return paths;
 }
 
+function pathsFromWorktreeLines(value) {
+  return porcelainPaths(value);
+}
+
 /**
  * Gate 6 must be checked against the tree the receipt describes, not the tree
  * the validator happens to be installed in. Reading the validator's own repo
@@ -165,19 +174,7 @@ function actualWorktreePaths(worktreeDir) {
   } catch {
     return { ok: false, paths: [] };
   }
-  const paths = [];
-  for (const rawLine of out.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    const rename = line.match(/^.+\s->\s(.+)$/);
-    if (rename) {
-      paths.push(normalizePath(rename[1]));
-      continue;
-    }
-    const porc = line.match(/^[MADRC?!U!]{1,2}\s+(.+)$/);
-    if (porc) paths.push(normalizePath(porc[1]));
-  }
-  return { ok: true, paths };
+  return { ok: true, paths: porcelainPaths(out) };
 }
 
 function evidencePresent(entry) {

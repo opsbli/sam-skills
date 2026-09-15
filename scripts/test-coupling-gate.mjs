@@ -23,48 +23,9 @@
 
 import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
 import { join, extname } from "node:path";
+import { collectTestFiles } from "./test-file-utils.mjs";
 
 const INTERNAL_MEMBER_RE = /\.\s*_[a-zA-Z]\w*|\[\s*['"]_[a-zA-Z]\w*['"]\s*\]/;
-const TEST_EXTENSIONS = new Set([".js", ".mjs", ".cjs", ".ts", ".jsx", ".tsx"]);
-const SKIP_DIRS = new Set(["node_modules", ".git", ".workbuddy", "dist", "build"]);
-
-function isTestFile(path) {
-  const base = path.split(/[\\/]/).pop() ?? "";
-  const inNamedDir = /(^|[\\/])(tests?|__tests__)[\\/]/.test(path);
-  return TEST_EXTENSIONS.has(extname(base)) && (inNamedDir || /\.test\.|\.spec\./.test(base));
-}
-
-function walk(dir, out) {
-  let entries;
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    if (SKIP_DIRS.has(entry)) continue;
-    const full = join(dir, entry);
-    let st;
-    try {
-      st = statSync(full);
-    } catch {
-      continue;
-    }
-    if (st.isDirectory()) walk(full, out);
-    else if (isTestFile(full)) out.push(full);
-  }
-}
-
-function collectTestFiles(paths) {
-  const files = [];
-  for (const p of paths) {
-    if (!existsSync(p)) continue;
-    if (statSync(p).isDirectory()) walk(p, files);
-    else if (isTestFile(p)) files.push(p);
-  }
-  return [...new Set(files)];
-}
-
 export function detectCoupling(content) {
   const hits = [];
   const lines = content.split(/\r?\n/);

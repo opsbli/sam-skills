@@ -24,40 +24,11 @@
 // the log as evidence.
 
 import { existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
-import { readdirSync, statSync } from "node:fs";
-import { join, extname } from "node:path";
+import { join } from "node:path";
+import { walk } from "./test-file-utils.mjs";
 
 const LOG = ".tdd-slice-log.jsonl";
-const TEST_EXTENSIONS = new Set([".js", ".mjs", ".cjs", ".ts", ".jsx", ".tsx"]);
 const TEST_NAME_RE = /(?:^|\s)(?:test|it)\(\s*['"`]([^'"`]+)['"`]/;
-const SKIP_DIRS = new Set(["node_modules", ".git", ".workbuddy", "dist", "build"]);
-
-function isTestFile(path) {
-  const base = path.split(/[\\/]/).pop() ?? "";
-  const inNamedDir = /(^|[\\/])(tests?|__tests__)[\\/]/.test(path);
-  return TEST_EXTENSIONS.has(extname(base)) && (inNamedDir || /\.test\.|\.spec\./.test(base));
-}
-
-function walk(dir, out) {
-  let entries;
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    if (SKIP_DIRS.has(entry)) continue;
-    const full = join(dir, entry);
-    let st;
-    try {
-      st = statSync(full);
-    } catch {
-      continue;
-    }
-    if (st.isDirectory()) walk(full, out);
-    else if (isTestFile(full)) out.push(full);
-  }
-}
 
 function inventory() {
   const files = [];
