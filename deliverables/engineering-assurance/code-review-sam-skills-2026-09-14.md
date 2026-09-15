@@ -428,6 +428,21 @@ git fetch --refetch --no-tags --force upstream main
 
 ---
 
+### 第十五轮：🟡 #40 散文计数 + 🟢 #44 mailbox 写失败韧性
+
+| 项目 | 状态 | 改动 | 验证证据 |
+|---|---|---|---|
+| **🟡 #40 README「32 个 promoted」散文计数无校验** | ✅ | `lint-skills.mjs` 抽取 README 中所有 `<n> promoted` 字样（`32 个 promoted Skills` 与 mini-receipt 的 `OK (32 promoted)` 都命中），**逐个**与 promoted 集合比对；**一个都没有也算失败**（防止有人把那句改没了） | `verify:all` **14/14**（README 现值 32 = 集合 32，通过） |
+| **🟢 #44 mailbox 写失败无日志** | ✅ | ① 服务端 `check_mailbox`：写失败 → 侧车 `failures.log` + **仍然投递**（返回 `delivery_persisted: false`）——receipt 已在手，可能的重投好过一次因钩子崩溃而彻底丢失的投递；② `recordRun` 同样落到侧车日志；③ **钩子自身的写**也包上 try/catch | 三个套件 **16/16、25/25、12/12**；`verify:all` **14/14** |
+
+**追下去比报告写的更深**：🟢 #44 原本只是"无日志"，但顺着 `saveMailbox` 的调用方看，**钩子侧**的写失败是未捕获异常——磁盘满会让 Stop 事件整个卡死。这条从 🟢 提到了值得修的档位。
+
+**诚实边界**：写失败路径**无法用跨平台测试模拟**（在 Windows 上把目录设为只读不可靠），所以韧性**由构造保证**，测试不声称覆盖它——与 stop-hook 原子写同一处理。
+
+**剩余 🟡/🟢**：#39（门之间重复的 walk/porcelain 助手）、#42（锁无 PID 存活校验）、#43（fixture 半密闭 + AC6 冗余）。
+
+---
+
 ## 🏗️ 架构影响评估（Archi）
 
 ### 一个根因，六处症状：**「同一条规则被复写多份，且防漂移不接线」**
