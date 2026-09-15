@@ -95,6 +95,22 @@ function lockHolder(file) {
   return holder && typeof holder === 'object' ? holder : null;
 }
 
+/**
+ * True when a process id is not running. `kill(pid, 0)` is the portable probe:
+ * ESRCH means gone, EPERM means alive but owned by someone else. Only applied
+ * when the lock actually recorded a pid — a legacy holder without one falls
+ * through to the time-based sweep rather than being broken on a guess.
+ */
+function holderProcessIsGone(holder) {
+  if (!holder || !Number.isInteger(holder.pid) || holder.pid <= 0) return false;
+  try {
+    process.kill(holder.pid, 0);
+    return false;
+  } catch (error) {
+    return error.code === 'ESRCH';
+  }
+}
+
 /** Age of a lock in ms: the holder's clock when recorded, else the directory's. */
 function lockAge(file) {
   const holder = lockHolder(file);
@@ -113,8 +129,13 @@ function acquireLock(checkout, task) {
     fs.mkdirSync(file);
   } catch {
     const holder = lockHolder(file);
+    // A holder whose process is gone is stale no matter how recently it was
+    // written: the run that was supposed to produce a receipt cannot produce
+    // one any more. PID reuse is the only way a dead holder looks alive, and
+    // the time-based sweep still bounds that.
+    const holderIsDead = holderProcessIsGone(holder);
     const limit = holder ? STALE_LOCK_MS : ORPHAN_LOCK_MS;
-    if (lockAge(file) > limit) {
+    if (holderIsDead || lockAge(file) > limit) {
       fs.rmSync(file, { recursive: true, force: true });
       try {
         fs.mkdirSync(file);
@@ -125,7 +146,7 @@ function acquireLock(checkout, task) {
       return { ok: false, holder: holder || { note: 'lock present but no holder recorded' } };
     }
   }
-  writeJson(path.join(file, 'task.json'), task);
+  writeJson(path.join(file, 'task.json'), { ...task, pid: process.pid });
   return { ok: true };
 }
 

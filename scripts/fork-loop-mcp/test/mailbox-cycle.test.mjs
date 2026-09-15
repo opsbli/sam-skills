@@ -18,7 +18,7 @@
 
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
@@ -48,6 +48,25 @@ const lockPathFor = (stateDir) =>
     stateDir,
     `exec-${crypto.createHash("sha256").update(path.resolve(checkout)).digest("hex").slice(0, 16)}.lock`,
   );
+
+/**
+ * A process id that is guaranteed to be free: spawnSync returns after the child
+ * has exited and been reaped, and a few probes confirm it no longer responds.
+ * Guessing an out-of-range pid would be platform-specific (ESRCH vs EINVAL).
+ */
+function deadPid() {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const pid = spawnSync(process.execPath, ["-e", "setTimeout(() => {}, 50)"]).pid;
+    for (let probe = 0; probe < 10; probe += 1) {
+      try {
+        process.kill(pid, 0);
+      } catch (error) {
+        if (error.code === "ESRCH") return pid;
+      }
+    }
+  }
+  return null;
+}
 
 /** Spawn a server with its own state dir and return a small RPC client. */
 function makeClient(extraEnv = {}) {
@@ -121,11 +140,11 @@ function makeClient(extraEnv = {}) {
       fs.rmSync(client.lockPath, { recursive: true, force: true });
     },
     /** A lock directory exactly as acquireLock leaves it behind. */
-    holdLock(taskId = "holder-task") {
+    holdLock(taskId = "holder-task", pid = process.pid) {
       fs.mkdirSync(client.lockPath, { recursive: true });
       fs.writeFileSync(
         path.join(client.lockPath, "task.json"),
-        JSON.stringify({ id: taskId, startedAt: Date.now() }),
+        JSON.stringify({ id: taskId, pid, startedAt: Date.now() }),
       );
     },
     /** A lock directory with no holder — the crash-between-mkdir-and-write state. */
@@ -436,6 +455,57 @@ test("a lock with no recorded holder is refused, never stolen", async () => {
   assert.match(payload.error, /locked by an active execution/);
   assert.deepEqual(main.readMailbox().receipts, [], "nothing may be launched");
   assert.equal(fs.existsSync(main.lockPath), true, "the lock must not be broken by a racer");
+});
+
+test("a lock whose holder process is gone is broken at once", async (t) => {
+  const pid = deadPid();
+  if (pid === null) {
+    t.skip("could not stage a dead process id");
+    return;
+  }
+  if (!SPLIT_SAFE) {
+    t.skip("process.execPath contains a space; FORK_LOOP_ZCODE_CMD cannot be split");
+    return;
+  }
+  const revived = makeClient({ FORK_LOOP_ZCODE_CMD: `${process.execPath} ${STUB_RUNNER}` });
+  clients.push(revived);
+  revived.holdLock("dead-task", pid);
+
+  const { payload } = await revived.callTool("spawn_execution", {
+    checkout,
+    planner_session: "sess_A",
+    spec_ready: SPEC_READY,
+  });
+
+  assert.equal(
+    payload.ok,
+    true,
+    "a dead holder must not hold the checkout until the six-hour sweep",
+  );
+  const holder = JSON.parse(fs.readFileSync(path.join(revived.lockPath, "task.json"), "utf8"));
+  assert.equal(holder.id, payload.task_id, "the new execution must own the lock");
+});
+
+test("the holder recorded for a refusal carries its pid", async () => {
+  // A pid on the holder is what makes the liveness probe possible at all; a
+  // refusal without one is a lock that can only be cleared by the time sweep.
+  main.clearLock();
+  main.holdLock("holder-task");
+  main.seedMailbox([]);
+
+  const { payload } = await main.callTool("spawn_execution", {
+    checkout,
+    planner_session: "sess_A",
+    spec_ready: SPEC_READY,
+  });
+
+  assert.equal(payload.ok, false);
+  assert.equal(
+    Number.isInteger(payload.holder.pid),
+    true,
+    "the refusal must expose the holder's pid",
+  );
+  main.clearLock();
 });
 
 test("release_execution refuses without a task_id or force", async () => {
