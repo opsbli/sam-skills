@@ -153,6 +153,19 @@ function mailboxFile(checkout) {
   return path.join(stateRoot(checkout), 'mailbox.json');
 }
 
+/** Best-effort sidecar log next to the mailbox, for failures that would
+ * otherwise be visible only on a stderr nobody is watching. */
+function logFailure(checkout, message) {
+  try {
+    fs.appendFileSync(
+      path.join(stateRoot(checkout), 'failures.log'),
+      `${new Date().toISOString()} ${message}\n`,
+    );
+  } catch {
+    /* the disk is the thing that failed; there is nowhere left to say so */
+  }
+}
+
 function loadMailbox(checkout) {
   return readJson(mailboxFile(checkout), { receipts: [] });
 }
@@ -457,6 +470,7 @@ function recordRun(checkout, task, result) {
     // With the entry unwritten the planner is never handed a receipt, and the
     // lock would sit until the stale sweep. The run is over either way, so
     // release it and say so instead of stranding the checkout.
+    logFailure(checkout, `recordRun could not record ${task.id}: ${error && error.message}`);
     console.error(`[fork-loop] failed to record run ${task.id}: ${error && error.message}`);
     releaseLockIfHeldBy(checkout, task.id);
   }
@@ -481,9 +495,20 @@ async function checkMailbox(args) {
   const mail = deliverable[0];
   mail.state = 'delivered';
   mail.deliveredAt = Date.now();
-  saveMailbox(checkout, box);
+  // A failed write must not block the Stop event: the receipt is in hand, and
+  // delivering it unpersisted risks a redelivery, which beats losing it to a
+  // hook that crashed on an error response. The failure goes to a sidecar log
+  // because a stderr nobody is watching is not observability.
+  let persisted = true;
+  try {
+    saveMailbox(checkout, box);
+  } catch (error) {
+    persisted = false;
+    logFailure(checkout, `check_mailbox could not persist delivery of ${mail.task_id}: ${error && error.message}`);
+  }
   return {
     ok: true,
+    delivery_persisted: persisted,
     mail: {
       task_id: mail.task_id,
       topic: mail.topic,

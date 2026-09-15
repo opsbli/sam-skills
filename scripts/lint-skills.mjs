@@ -364,6 +364,26 @@ for (const link of topLinks) {
 reportDiff("plugin.json", pluginIds, promotedIds);
 reportDiff("README.md", topIds, promotedIds);
 
+// The README states the promoted count in prose, twice: the release summary and
+// the mini-receipt example. A link check cannot see a number, so adding or
+// retiring a skill updates the links and leaves "32 promoted" behind — which is
+// exactly the figure a reader quotes back when the counts disagree.
+const claimedCounts = [...topReadme.matchAll(/(\d+)\s*(?:个\s*)?promoted/g)].map((m) =>
+  Number(m[1]),
+);
+if (claimedCounts.length === 0) {
+  fail(
+    `README.md states no promoted-skill count in prose (expected something like "${promotedIds.size} 个 promoted Skills")`,
+  );
+}
+for (const claimed of new Set(claimedCounts)) {
+  if (claimed !== promotedIds.size) {
+    fail(
+      `README.md claims ${claimed} promoted skills in prose, but the promoted set has ${promotedIds.size} — update the release summary and the mini-receipt example together with the skill list`,
+    );
+  }
+}
+
 for (const bucket of PROMOTED) {
   const readmePath = `skills/${bucket}/README.md`;
   const source = existsSync(join(repo, readmePath))

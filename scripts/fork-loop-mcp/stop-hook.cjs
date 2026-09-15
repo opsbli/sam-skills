@@ -82,8 +82,23 @@ function main() {
   mail.deliveredAt = Date.now();
   const file = mailboxFile(checkout);
   const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(box, null, 2));
-  fs.renameSync(tmp, file);
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(box, null, 2));
+    fs.renameSync(tmp, file);
+  } catch (error) {
+    // Delivering unpersisted risks a redelivery on the next Stop; blocking the
+    // Stop event instead loses the receipt entirely, because a hook that exits
+    // non-zero does not hand the planner anything. Choose the redelivery, and
+    // leave a line where the next diagnosis will look.
+    try {
+      fs.appendFileSync(
+        path.join(path.dirname(file), 'failures.log'),
+        `${new Date().toISOString()} stop-hook could not persist delivery of ${mail.task_id}: ${error && error.message}\n`,
+      );
+    } catch {
+      /* the disk is the thing that failed */
+    }
+  }
 
   const context = [
     `[fork-loop] Execution receipt returned (task ${mail.task_id}, topic: ${mail.topic || 'n/a'}).`,
