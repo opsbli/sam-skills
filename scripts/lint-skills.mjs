@@ -98,7 +98,9 @@ function runDiffAudit(ref) {
     for (const name of listSkillDirs(bucket)) {
       const skillId = id(bucket, name);
       if (FORK_OWNED.has(skillId)) continue;
-      targets.push({ skillId, name, skillPath: join("skills", bucket, name) });
+      // Forward slashes throughout: git prints `/`-separated paths on every
+      // platform, so the grouping below must not depend on the host separator.
+      targets.push({ skillId, name, skillPath: ["skills", bucket, name].join("/") });
     }
   }
   if (targets.length === 0) {
@@ -107,25 +109,43 @@ function runDiffAudit(ref) {
     );
   }
 
+  // One diff over every audited directory, grouped by file, instead of one
+  // subprocess per skill. On Windows a git spawn costs a good fraction of a
+  // second, which made `--diff-audit` the slowest step in the audit by far.
+  // `--no-renames` keeps each changed file on a single line with a plain path, so
+  // the grouping cannot be confused by rename brace syntax, and a file moved in
+  // from outside the audited directories is counted where it landed rather than
+  // vanishing.
+  const auditRoots = [
+    ...new Set(targets.map((t) => t.skillPath.split("/").slice(0, 2).join("/"))),
+  ];
+  const numstat = git([
+    "diff",
+    "--numstat",
+    "-w",
+    "--no-renames",
+    `${ref}...HEAD`,
+    "--",
+    ...auditRoots,
+  ]);
+
+  const changedByFile = new Map();
+  for (const line of numstat.split("\n")) {
+    if (!line.trim()) continue;
+    const parts = line.split("\t");
+    if (parts.length < 3) continue;
+    const added = parseInt(parts[0], 10) || 0;
+    const removed = parseInt(parts[1], 10) || 0;
+    if (added + removed === 0) continue;
+    changedByFile.set(parts[2], (changedByFile.get(parts[2]) || 0) + added + removed);
+  }
+
   const warnings = [];
   const rows = [];
-  const unreadable = [];
-  let audited = 0;
-
   for (const { skillId, name, skillPath } of targets) {
-    let numstat;
-    try {
-      numstat = git(["diff", "--numstat", "-w", `${ref}...HEAD`, "--", skillPath]);
-    } catch {
-      unreadable.push(skillId);
-      continue;
-    }
-    audited += 1;
-    if (!numstat) continue;
     let changed = 0;
-    for (const line of numstat.split("\n")) {
-      const [added, removed] = line.split("\t");
-      changed += (parseInt(added, 10) || 0) + (parseInt(removed, 10) || 0);
+    for (const [file, count] of changedByFile) {
+      if (file === skillPath || file.startsWith(`${skillPath}/`)) changed += count;
     }
     if (changed === 0) continue;
     const justified = changesetText.includes(name);
@@ -136,14 +156,8 @@ function runDiffAudit(ref) {
       );
     }
   }
+  const audited = targets.length;
 
-  if (unreadable.length) {
-    console.error(
-      `diff-audit: ${unreadable.length}/${targets.length} inherited skills could not be diffed against ${ref}:`,
-    );
-    for (const skillId of unreadable) console.error(`  ${skillId}`);
-    abort("partial audit");
-  }
   if (audited !== targets.length) {
     abort(
       `audited ${audited} of ${targets.length} inherited skills (merge base ${mergeBase})`,
