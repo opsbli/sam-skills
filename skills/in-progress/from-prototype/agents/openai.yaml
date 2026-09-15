@@ -1,0 +1,5 @@
+interface:
+  display_name: "From Prototype"
+  short_description: "Turn product prototypes into grill-ready plan drafts"
+policy:
+  allow_implicit_invocation: false
