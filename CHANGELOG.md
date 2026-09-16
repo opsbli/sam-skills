@@ -1,5 +1,153 @@
 # mattpocock-skills
 
+## 1.2.3
+
+### Patch Changes
+
+- [`d65615d`](https://github.com/opsbli/sam-skills/commit/d65615d609e39e041eff35d05bc20b8202f78b13) - Cover the main flow's unmeasured nodes, and stop the harvest gate pretending.
+
+  Two of this pipeline's numbers were quietly false, and both were false in the
+  same direction — everything looked exercised.
+
+  - **Four golden tasks added** for the main-flow nodes that had never been run:
+    `grilling`, `to-spec`, `execute-spec-in-fork`, and `domain-modeling`. Before
+    this the eval set covered 4 of 33 promoted skills, and the scoreboard could
+    honestly claim nothing about the pipeline's entrance, about the `SPEC READY`
+    block every later stage reads, about the transport boundary ADR 0007 rewrote,
+    or about the skill every `Docs delta` settles into. Each new task measures a
+    contract rather than general competence — the `to-spec` one grades whether the
+    block is an _index_ rather than a pasted copy, and the `domain-modeling` one
+    grades ADR _restraint_, which is the half of that skill agents reliably get
+    wrong. `execute-spec-in-fork`'s task is the one to run first: it is the task
+    whose subject was just deleted and rebuilt.
+  - **`harvest` no longer reads thin ledgers as a full population.** Its triage
+    rule has always been "same friction on 2+ receipts", which at one receipt can
+    never fire — yet its docs presented the ledgers as the primary input, so the
+    gate read as though it were weighing evidence it structurally could not have.
+    It now checks the row count before trusting them, names the eval scoreboard as
+    the actual primary input while the sample is small, and says so in its summary
+    instead of upgrading one incident to a pattern. The check is written to be
+    re-run rather than assumed permanent: the day `metrics.md` carries a real
+    population, the ledgers go back to being the strongest evidence available.
+  - **Sync drift is measured where it belongs.** `README.md` states the sync
+    baseline correctly (`6654f6b`) but cannot express how far upstream has moved
+    since; the 2026-09-16 drill row in `docs/sync-drill-log.md` records it — 5
+    unabsorbed commits, 2 conflicted files, both of them structural (`CLAUDE.md`
+    conflicts every time because it is this fork's identity document; upstream's
+    `skills/in-progress/retro` needs a keep-or-drop decision, not a merge
+    default). A hand-written sentence in the README would go stale at the next
+    sync; the ledger accumulates.
+  - **The manual runbook now names its validator.** ADR 0007's retirement of the
+    fork-loop transport was right, but it took the mechanical guarantees with it —
+    no lock, no spawn record, no liveness probe. The one remaining defence is the
+    receipt check, so it is now written into the runbook as a fixed step rather
+    than something the planning thread has to remember exists.
+
+- [`d65615d`](https://github.com/opsbli/sam-skills/commit/d65615d609e39e041eff35d05bc20b8202f78b13) - Give the express lane a contract, a validator, and teeth.
+
+  The README described a third route — inline completion for work below the
+  complexity floor, closed with a three-line mini receipt — but nothing else in
+  the repo knew it existed. Searching every `SKILL.md` for it returned exactly
+  one clause, in `execute-spec-in-fork`; `contracts/receipt-v2.json` had no mini
+  receipt in it; `receipt-gate.mjs` did not recognise one; and `ask-matt`'s main
+  flow offered no branch that led there. It was the only path to completed work
+  in this pipeline that no gate touched, which makes three lines of prose an
+  audit hole rather than a convenience.
+
+  - `contracts/mini-receipt-v1.json` is now the express lane's own contract —
+    deliberately a separate file from `receipt-v2.json`, because merging them
+    would either force every typo fix through eighteen fields or hand the fork
+    route a three-line escape hatch. `Schema: mini-receipt/v1` pins the format so
+    a mini receipt cannot be assembled after the fact.
+  - `scripts/mini-receipt-gate.mjs` validates four gates, all mechanical: one
+    receipt with all three content lines; `what changed` carrying substance;
+    `validation run` naming something actually run (with `none` rejected outright
+    — work with no cheap validation failed the lane's own entry criteria and
+    belongs on the fork route); and every path claimed in `worktree state` really
+    being dirty. That last gate is one-directional on purpose: express work
+    happens in a shared checkout that is often already carrying unrelated edits,
+    so demanding equality would fail honest work for someone else's mess, while
+    claiming a change that never landed is still caught.
+  - Wired into the pipeline, not left beside it: `spec-executor` and
+    `execute-spec-in-fork` both check the complexity floor and emit the block,
+    `ask-matt`'s main flow gained the branch, and `verify` gained a guard. Nine
+    cases in `scripts/mini-receipt-gate.test.mjs` run against a throwaway git
+    repo rather than this one — grading the gate against sam-skills' own working
+    tree would key CI off whoever's uncommitted edits happened to be sitting there.
+
+- [`4f202ed`](https://github.com/opsbli/sam-skills/commit/4f202eda221555a03ed887e607b69b58670752e4) - Expression-layer style pass across inherited skills: punctuation and wording normalization only (colon-separated clauses rewritten as em-dash parentheticals; no rule, step, or behavior changed). Nominated under the inherited-skill 40-line diff-audit budget — the per-skill overage is the accumulated diff of these cosmetic edits vs upstream/main, verified by diff sampling (triage, ask-matt, wayfinder spot-checks show balanced +/- lines with identical semantics).
+
+  The inherited skills this pass touches, named here because `lint-skills.mjs --diff-audit` looks for the skill name anywhere in a changeset to grant the budget exemption — so the names have to survive in this body, not only in frontmatter that a single-package workspace cannot carry: ask-matt, code-review, codebase-design, diagnosing-bugs, domain-modeling, grilling, improve-codebase-architecture, prototype, setup-matt-pocock-skills, teach, to-tickets, triage, wayfinder, wizard, writing-for-agents.
+
+- [`2dda55c`](https://github.com/opsbli/sam-skills/commit/2dda55c439bea402c92e22468c527bb62181e55d) - Harden the archive gate, the guard set, and the fork-maintenance path.
+
+  - `receipt-gate` gates as intended. Pass/fail markers are word-bounded
+    (`bypass`/`failure`/`passenger` no longer read as verdicts), fields are anchored
+    to the contract's field list (a criteria entry shaped like `- AC1: …` no longer
+    truncates the Acceptance criteria block), and Gate 6 compares against
+    `--checkout` instead of the validator's own repository.
+  - `sync-upstream.sh` guards what it claims to. The old check asked whether the
+    merge base descends from `upstream/main` — true by construction, so it could
+    never fire. It now refuses unrelated histories and warns when the baseline
+    recorded in `README.md` stops being an ancestor (the signature of an upstream
+    rewrite), and a `trap` aborts and restores the checkout on a rebase conflict
+    instead of leaving it mid-rebase with no message.
+  - Version identity is checked where it is written: `sync-plugin-version.mjs` now
+    covers the README fork badge as well as the plugin manifests, and `npm run
+version` regenerates the Codex payload so a version PR cannot ship a drifted
+    mirror.
+  - New guards in `verify:all`: `agents-md-gate.mjs` (AGENTS.md must be a real
+    pointer, not a symlink materialised into nine bytes) and `transport-gate.mjs`
+    (the transport registry in `contracts/transports.json` and the detection list
+    in `execute-spec-in-fork` must agree). `verify.mjs` also refuses a `*.test.mjs`
+    that asserts nothing, so a suite registering no tests is caught instead of
+    reporting green.
+  - `explainer-page-gate.mjs` covers the one copy of the pipeline description no
+    gate could reach: the published page at `workbuddy.link`. Retiring a transport
+    used to leave it describing a route the repo no longer had — it still read
+    "三条传输" with a fork-loop card a full day after ADR 0007 deleted the code,
+    and only a human happening to look caught it. `contracts/explainer-page.json`
+    records the last time the page was verified against `contracts/transports.json`;
+    the gate fails when the registry moves without a re-verify, and `--sync`
+    (network, opt-in) re-reads the live page and refuses to record a state that
+    disagrees with it. Retired route names now live in `contracts/transports.json`
+    rather than in the gate, so there is one list of what no longer exists. Note
+    what it does not do: it cannot see someone editing the page behind our back —
+    that needs `--sync`; a green run proves the registry has not moved, not that
+    the page is current.
+
+- [`fdacd60`](https://github.com/opsbli/sam-skills/commit/fdacd60827cfeffa078e514966cca70059babe61) - Guardrail and contract hardening from a repo-wide skills audit.
+
+  - `spec-executor` becomes user-invoked. Nothing may start an execution on the
+    model's own initiative: firing it inside the planning thread is the failure
+    the README already flags as the most common way to miss the fork, and the
+    single user-facing step in every route (a pasted `SPEC READY`, a Messenger
+    Ask, a manual `/spec-executor`) stays exactly as it was.
+  - The receipt contract now lives in `contracts/receipt-v2.json`. `receipt-gate`
+    derives its gates, error codes, and Conclusion vocabulary from it, and
+    `--check` walks 14 landing points — rejecting any stale
+    `spec-executor-receipt/vN`, the retired two-word `partially completed`
+    outcome that no gate would ever have admitted, and a half-finished version
+    bump. Delivery documents became optional landing points, so archiving them no
+    longer breaks the validator.
+  - `to-goal` reaches `/goal-crafter` by invocation instead of reading
+    `../goal-crafter/SKILL.md`, which is the dependency style
+    `.agents/invocation.md` rules out. `to-goal`, `harvest`, and
+    `project-standards` descriptions drop model-trigger phrasing now that all
+    three are user-invoked.
+  - Repo tooling: `npm run verify` aggregates every read-only guard and runs in
+    CI and the pre-push hook; `contracts/fork-authorship.json` is the single
+    source for the fork-authored list, so `project-standards` and `harvest` stop
+    being audited as inherited skills; `append-only-gate.mjs` protects the
+    telemetry ledgers; `AGENTS.md` is a real pointer instead of nine bytes of
+    literal text; and `build-codex-plugin.mjs` reproduces the whole committed
+    payload — including the MCP block and Stop hook — so regenerating it can no
+    longer strip the Codex plugin's transport while turning `--check` green.
+
+- [`6518d68`](https://github.com/opsbli/sam-skills/commit/6518d686e4726031288ec975caf83f199e553fb1) - Add the harvest skill (telemetry ledgers -> skill-revision proposals, human-approved) and the minimal eval set (8 golden tasks over the core pipeline, scoreboard, draft-proposal loop). Close the knowledge-recovery loop and make the attractor claim measurable.
+
+- [`4f202ed`](https://github.com/opsbli/sam-skills/commit/4f202eda221555a03ed887e607b69b58670752e4) - Add the stack-playbooks layer to project-standards: new STACK-PLAYBOOKS.md (43 lines — per-stack playbook guidance the audit mode references), a corresponding SKILL.md section (+62 lines wiring playbooks into the audit/update flow), and agents/openai.yaml metadata for the Codex adapter. This is a deliberate fork feature: upstream has no stack-playbook concept; the fork's project-standards audit needs stack-specific rules to stay checkable rather than aspirational.
+
 ## Unreleased
 
 ### Patch Changes

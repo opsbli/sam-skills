@@ -7,7 +7,7 @@
 让规划线程专注于把事情想清楚，让执行线程专注于把事情做完。
 
 [![Upstream](https://img.shields.io/badge/upstream-mattpocock%2Fskills%20v1.2.3-171717?style=flat-square)](https://github.com/mattpocock/skills)
-[![Fork](https://img.shields.io/badge/fork-v1.2.3--to--goal.3-F35B2A?style=flat-square)](https://github.com/opsbli/sam-skills)
+[![Fork](https://img.shields.io/badge/fork-v1.2.3-F35B2A?style=flat-square)](https://github.com/opsbli/sam-skills)
 [![Receipt](https://img.shields.io/badge/receipt%20schema-v2-DCF23E?style=flat-square&labelColor=171717)](#demo一次完整闭环)
 [![License](https://img.shields.io/badge/license-MIT-DCF23E?style=flat-square&labelColor=171717)](LICENSE)
 
