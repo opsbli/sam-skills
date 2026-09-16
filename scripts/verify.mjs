@@ -81,6 +81,12 @@ const GUARDS = [
     args: [],
   },
   {
+    id: "explainer-page",
+    label: "published explainer page re-verified against the transport registry",
+    script: "scripts/explainer-page-gate.mjs",
+    args: [],
+  },
+  {
     id: "tdd-coupling",
     label: "tdd coupling gate self-check",
     script: "scripts/test-coupling-gate.mjs",
@@ -97,6 +103,7 @@ const GUARDS = [
 const TESTS = [
   { id: "test-receipt-gate", label: "receipt gate synthetic-error coverage", file: "scripts/receipt-gate.test.mjs" },
   { id: "test-coupling-gate", label: "coupling gate self-test", file: "scripts/test-coupling-gate.test.mjs" },
+  { id: "test-explainer-page", label: "explainer page gate teeth (drift mutations must fail)", file: "scripts/explainer-page-gate.test.mjs" },
 ];
 
 const argv = process.argv.slice(2);

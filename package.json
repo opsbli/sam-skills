@@ -24,7 +24,10 @@
     "test:receipt-gate": "node --test scripts/receipt-gate.test.mjs",
     "gate:coupling": "node scripts/test-coupling-gate.mjs",
     "gate:slice": "node scripts/tdd-slice-gate.mjs",
-    "gate:append-only": "node scripts/append-only-gate.mjs"
+    "gate:append-only": "node scripts/append-only-gate.mjs",
+    "gate:explainer-page": "node scripts/explainer-page-gate.mjs",
+    "explainer-page:sync": "node scripts/explainer-page-gate.mjs --sync",
+    "test:explainer-page": "node --test scripts/explainer-page-gate.test.mjs"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",

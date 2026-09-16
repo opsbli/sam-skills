@@ -21,5 +21,13 @@
       "decision": null,
       "note": "The honest fallback, and now the only route outside Codex App. A missing transport is named, never simulated."
     }
+  ],
+  "retired": [
+    {
+      "id": "fork-loop-mcp",
+      "tokens": ["fork-loop", "spawn_execution", "check_status"],
+      "decision": ".agents/adr/0007-retire-the-fork-loop-transport.md",
+      "note": "Retired 2026-09-15: the push half never fired on ZCode, and a pull-only route did not justify an MCP server. These names must NOT appear in the published explainer page — scripts/explainer-page-gate.mjs asserts that. They legitimately remain in history (ADRs, delivery notes, and README links to those ADRs), which is not rewritten."
+    }
   ]
 }

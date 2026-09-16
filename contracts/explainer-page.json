@@ -1,0 +1,20 @@
+{
+  "$comment": "The published pipeline explainer (workbuddy.link/p/q2roJSMji6XoVFqndZsfw9) is a fourth copy of the pipeline description — next to the skill, the README, and the ADRs. The other three live in the repo and are covered by gates; this one is edited through an upload API, has no owner here, and nothing failed when it kept describing a transport the repo had already retired. It did exactly that after ADR 0007: still '三条传输' with a fork-loop card a full day after the code was deleted, noticed only because a human happened to look. This file is the record of the last time someone verified the page against contracts/transports.json, and scripts/explainer-page-gate.mjs fails when the registry moves without the page being re-verified. The `observed` block is written by `--sync` from the live artifact, never by hand. Note that `artifactUrl` carries a version directory that advances on every publish, so re-syncing passes `--url` with the current one.",
+  "nodeId": "q2roJSMji6XoVFqndZsfw9",
+  "publishUrl": "https://workbuddy.link/p/q2roJSMji6XoVFqndZsfw9",
+  "artifactUrl": "https://workbuddy-space-static.codebuddy.work/page/q2roJSMji6XoVFqndZsfw9/1/sam-skills-pipeline-explainer.html",
+  "observed": {
+    "contentHash": "sha256:a9b0d3b6ad14a699f24b3e0b9ca5fb034b1829095eca22c0d6b095b93da2f11f",
+    "bytes": 51143,
+    "transportCards": 2,
+    "gridColumns": 2,
+    "headingNumeral": "两",
+    "retiredTokenHits": {
+      "fork-loop": 0,
+      "spawn_execution": 0,
+      "check_status": 0
+    }
+  },
+  "transportsFingerprintAtSync": "sha256:3377e50cdcbfa37373b9f569280cedb65bb252594b9f16f8a84d4374b6e3a0b4",
+  "lastSyncedAt": "2026-09-16"
+}

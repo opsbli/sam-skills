@@ -25,3 +25,16 @@ Harden the archive gate, the guard set, and the fork-maintenance path.
   in `execute-spec-in-fork` must agree). `verify.mjs` also refuses a `*.test.mjs`
   that asserts nothing, so a suite registering no tests is caught instead of
   reporting green.
+- `explainer-page-gate.mjs` covers the one copy of the pipeline description no
+  gate could reach: the published page at `workbuddy.link`. Retiring a transport
+  used to leave it describing a route the repo no longer had — it still read
+  "三条传输" with a fork-loop card a full day after ADR 0007 deleted the code,
+  and only a human happening to look caught it. `contracts/explainer-page.json`
+  records the last time the page was verified against `contracts/transports.json`;
+  the gate fails when the registry moves without a re-verify, and `--sync`
+  (network, opt-in) re-reads the live page and refuses to record a state that
+  disagrees with it. Retired route names now live in `contracts/transports.json`
+  rather than in the gate, so there is one list of what no longer exists. Note
+  what it does not do: it cannot see someone editing the page behind our back —
+  that needs `--sync`; a green run proves the registry has not moved, not that
+  the page is current.
