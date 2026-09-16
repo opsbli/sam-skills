@@ -15,6 +15,19 @@ One row per golden task. Updated after each run. `Defect signals` at the bottom 
 | code-review — fixed-point standards axis | code-review | 1 | 1/1 | — | 0 | 0 |
 | code-review — spec axis faithfulness | code-review | 1 | 1/1 | — | 0 | 0 |
 
+## Main-flow nodes added 2026-09-16 (awaiting a first run)
+
+These four existed in the README as load-bearing steps with zero behavioural evidence behind them. They are listed separately from the table above because a first run is not comparable to a repeat: until each has been run once, its row below cannot say anything except that nobody looked.
+
+| Task | Skill | Runs | Pass rate | Status |
+|---|---|---|---|---|
+| grilling — consent before understanding | grilling | 0 | — | never run |
+| to-spec — the ready block is an index, not a copy | to-spec | 0 | — | never run |
+| execute-spec-in-fork — no transport means say so | execute-spec-in-fork | 0 | — | never run |
+| domain-modeling — the overloaded term, and the ADR not written | domain-modeling | 0 | — | never run |
+
+`execute-spec-in-fork` is the priority first run: ADR 0007 deleted its entire automatic transport layer, and the change has not been exercised since.
+
 ## Per-skill aggregates (first run 2026-09-14 + repeat-test re-runs)
 
 | Skill | Pass rate | Note |
