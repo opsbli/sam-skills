@@ -63,6 +63,12 @@ const GUARDS = [
     args: ["--check"],
   },
   {
+    id: "mini-receipt-contract",
+    label: "express-lane mini receipt contract vs every landing point",
+    script: "scripts/mini-receipt-gate.mjs",
+    args: ["--check"],
+  },
+  {
     id: "append-only",
     label: "append-only ledger gate self-check",
     script: "scripts/append-only-gate.mjs",
@@ -102,6 +108,7 @@ const GUARDS = [
 
 const TESTS = [
   { id: "test-receipt-gate", label: "receipt gate synthetic-error coverage", file: "scripts/receipt-gate.test.mjs" },
+  { id: "test-mini-receipt-gate", label: "express-lane mini receipt gates", file: "scripts/mini-receipt-gate.test.mjs" },
   { id: "test-coupling-gate", label: "coupling gate self-test", file: "scripts/test-coupling-gate.test.mjs" },
   { id: "test-explainer-page", label: "explainer page gate teeth (drift mutations must fail)", file: "scripts/explainer-page-gate.test.mjs" },
 ];

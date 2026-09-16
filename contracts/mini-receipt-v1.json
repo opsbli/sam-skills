@@ -1,0 +1,51 @@
+{
+  "$comment": "The express-lane receipt contract. Kept separate from contracts/receipt-v2.json on purpose: the two receipts answer different questions and must never be conflated. v2 is the fork route's archival evidence — eighteen fields, six gates, a review fixed point. This one is the express lane's traceability floor: three lines proving the change happened, something actually validated it, and the worktree really is in the reported state. Merging them would either force every typo fix through eighteen fields or give the fork route a three-line escape hatch. Same discipline though: mini-receipt-gate.mjs derives its rules from here and `--check` walks every landing point, so a field rename lands in one place or fails loudly. Why this file exists at all: before it, the express lane was described only in README prose and one clause of execute-spec-in-fork — a documented route with no contract, no validator, and no telemetry. It was the one path to completed work that no gate touched.",
+  "schema": "mini-receipt/v1",
+  "heading": "MINI RECEIPT",
+  "$fieldsComment": "`Schema` is listed alongside the three content fields for the same reason it is in v2: the parser can only recognise a line it has been told starts a field, and a pin the parser cannot see is no pin at all — without it every mini receipt failed gate 1 reporting its first field as `what changed`. Three lines of content, one machine-readable pin holding them together; adding a fourth content field is a version bump, because a richer express receipt is a fork receipt wearing a disguise.",
+  "fields": ["Schema", "what changed", "validation run", "worktree state"],
+  "$gatesComment": "Deliberately weaker than v2's six, and deliberately not zero. The express lane earns its keep by skipping the fork lifecycle, not by skipping evidence: every gate here checks something a human would otherwise take on faith. Gate 4 is one-directional on purpose — see $gate4Comment.",
+  "gates": [
+    { "num": 1, "code": "102001", "label": "单一 MINI RECEIPT + 三字段齐全" },
+    { "num": 2, "code": "102002", "label": "what changed 有实质内容" },
+    { "num": 3, "code": "102003", "label": "validation run 声明了真实校验" },
+    { "num": 4, "code": "102004", "label": "声明的改动在工作树中真实存在" }
+  ],
+  "$gate4Comment": "One-directional containment: every path the receipt claims must really be dirty in the checked-out tree, but the tree may legally be dirtier than the receipt claims. Express work happens inside a shared checkout that is often already carrying unrelated edits; demanding bidirectional equality would fail honest work for someone else's mess. What it does catch is the actual failure mode — claiming a change that never landed.",
+  "preGate": { "code": "102011", "label": "Schema 首字段匹配" },
+  "internalErrorCode": "902001",
+  "$noneTokens": "Gate 3 accepts only these as an explicit admission of no validation. Note it still requires thought: writing `none` says no cheap check existed, which by the express-lane entry criteria means the work should not have taken this route at all.",
+  "noneTokens": ["none", "无", "n/a"],
+  "landingPoints": [
+    {
+      "path": "scripts/mini-receipt-gate.mjs",
+      "required": true,
+      "mustContain": ["contracts/mini-receipt-v1.json"]
+    },
+    {
+      "path": "skills/engineering/execute-spec-in-fork/SKILL.md",
+      "required": true,
+      "mustContain": ["Schema: {schema}", "{heading}"]
+    },
+    {
+      "path": "skills/engineering/spec-executor/SKILL.md",
+      "required": true,
+      "mustContain": ["Schema: {schema}", "{heading}"]
+    },
+    {
+      "path": "skills/engineering/ask-matt/SKILL.md",
+      "required": true,
+      "mustContain": ["{heading}"]
+    },
+    {
+      "path": "README.md",
+      "required": true,
+      "mustContain": ["Schema: {schema}", "{heading}"]
+    },
+    {
+      "path": "docs/metrics.md",
+      "required": true,
+      "mustContain": ["express"]
+    }
+  ]
+}

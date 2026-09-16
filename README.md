@@ -381,12 +381,15 @@ agent：低于复杂度地板（单文件、机械、无产品决策），走轻
       （直接改完，跑 markdown 校验）
 
 MINI RECEIPT
+- Schema: mini-receipt/v1
 - what changed: README.md 1 处 to-gola → to-goal
 - validation run: npm run lint:skills → OK (33 promoted)
 - worktree state: 仅 README.md 一行改动
 ```
 
-可追溯性保住了，fork 的仪式感没有出现。**判定规则**：单文件或几行机械改动 / 明显修复、无未决产品决策、触点有廉价验证——三条全满足才走直通；任一不满足，回到 fork 路由。
+轻量不等于无据：mini receipt 有独立契约（`contracts/mini-receipt-v1.json`）与四道机械门（`node scripts/mini-receipt-gate.mjs`）——单一 receipt、三行齐全、`validation run` 必须点名真实跑过的命令、声明改动的文件在工作树里确实处于改动态。最后一道是单向包含：claim 的改动必须真实存在，但工作树里预先存在的无关脏文件不算漂移（Express lane 发生在共享 checkout 里）。
+
+**判定规则**：单文件或几行机械改动 / 明显修复、无未决产品决策、触点有廉价验证——三条全满足才走直通；任一不满足，回到 fork 路由。`validation run` 写 `none` 会被第三道门拦下：没有廉价验证触点的工作按定义不符合准入条件。
 
 ## Fork 与 to-goal 分工
 

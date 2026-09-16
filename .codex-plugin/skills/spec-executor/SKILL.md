@@ -8,6 +8,31 @@ disable-model-invocation: true
 
 Implement one approved spec in the forked execution thread. Treat the planning thread as the source of product decisions, keep implementation detail here, and return a compact receipt that can be pasted back.
 
+## Complexity floor — check for the express lane before anything else
+
+This skill produces a `SPEC EXECUTION RECEIPT`, which is the heavy artifact. It is not the right artifact for everything. Check the floor first, before you look for a `SPEC READY` block, because work below it should never have been handed to an execution thread at all.
+
+Take the **express lane** when all three hold:
+
+- the change is a single-file or few-line mechanical edit, or an obvious bug fix following an established pattern, and no product decision is open;
+- the repository offers cheap non-test validation at the touched seam;
+- completing it here would not meaningfully protect the requesting thread's context.
+
+In the express lane, do the work in the requesting thread itself and close it with a three-line mini receipt. Do not manufacture a `SPEC EXECUTION RECEIPT` for it: padding three honest lines out to eighteen fields fabricates a goal, a review fixed point, and acceptance criteria for work that had none.
+
+```text
+MINI RECEIPT
+
+- Schema: mini-receipt/v1 (required, must be the first field)
+- what changed: <one line — which file, which edit>
+- validation run: <the actual command you ran and its result, not "OK">
+- worktree state: <which files are dirty now, or "clean">
+```
+
+The `Schema` line is what makes it checkable rather than decorative: `mini-receipt-gate.mjs` validates all four gates mechanically, including confirming every file you claim to have changed really is dirty. Three lines, but they have to be true.
+
+When any one of the three criteria fails, fall through to the fork route below. Err toward the full receipt when the task carries real ambiguity or a wide blast radius — the cost of one unnecessary receipt is eighteen lines; the cost of an unaudited change is the change itself.
+
 ## Resolve the execution contract
 
 1. Find the latest `SPEC READY` block in inherited conversation history. Later user corrections override it; older conflicting requirements do not.
@@ -92,6 +117,8 @@ Keep the receipt concise but evidence-bearing. Include exact commands, counts, i
 Redact credentials, tokens, cookies, personal data, and sensitive environment identifiers before the receipt leaves the execution thread.
 
 The `Schema` line pins the receipt format so the planning thread can validate a receipt mechanically even when it arrives by paste on the manual route. A receipt without a `Schema` first field, or with a version older than the one the planning thread expects, is a validation failure there — do not silently drop or rename the line. Bump the version whenever a required field is added, removed, or renamed, and record the bump in the receipt ADR.
+
+Assume this receipt will be fed straight into `scripts/receipt-gate.mjs` on the planning side, because on the manual route it is. That machine check is literal, not advisory: it word-bounds pass/fail markers (so `implement bypass logic` does not read as evidence), anchors every field to the contract's field list, requires each acceptance criterion to carry both a verdict and something that substantiates it, rejects a blank `Planning-thread decision needed` rather than reading it as none, and diffs your claimed final worktree against the real one. Write for it — the field names verbatim, one receipt per block, no second `Schema` line hiding further down.
 
 `Docs delta` is how execution pays back the project's fact documents. During implementation, note every place where you made a product-adjacent call the spec did not cover, hit a constraint the spec did not mention, or needed a domain term the glossary does not have. Report them, one per line, or write `none` explicitly — a blank field is a defect, not a zero. Do **not** edit `CONTEXT.md` or ADRs from the execution thread: the planning thread owns the fact documents, and your delta is its input, not a bypass.
 

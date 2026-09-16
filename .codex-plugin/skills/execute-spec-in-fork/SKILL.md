@@ -22,7 +22,24 @@ This workflow is for work that earns the fork overhead. Route to the express lan
 - it fits comfortably in the current planning context, so protecting that context is not the point;
 - the repository offers cheap non-test validation for the touched seam.
 
-In the express lane, complete the change in the planning thread itself and close it with a three-line mini receipt: `what changed / validation run / worktree state`. Do not create a fork, an Ask, or a full `SPEC EXECUTION RECEIPT` lifecycle for express work. When any criterion fails, the fork route below is the default — erring toward the fork when the task carries real ambiguity or a wide blast radius.
+In the express lane, complete the change in the planning thread itself and close it with a mini receipt carrying a `Schema` first field. Do not create a fork, an Ask, or a full `SPEC EXECUTION RECEIPT` lifecycle for express work:
+
+```text
+MINI RECEIPT
+
+- Schema: mini-receipt/v1 (required, must be the first field)
+- what changed: <one line — which file, which edit>
+- validation run: <the actual command you ran and its result, not "OK">
+- worktree state: <which files are dirty now, or "clean">
+```
+
+Validate it before moving on — the lane is cheap, not unguarded:
+
+```bash
+node <plugin>/scripts/mini-receipt-gate.mjs --receipt <file> --checkout <project-dir>
+```
+
+Four gates, all mechanical: one receipt, every one of the three lines present, `validation run` naming something real (`none` means the work failed the entry criteria above and belongs on the fork route), and every file claimed in `worktree state` actually being dirty. When any entry criterion fails, the fork route below is the default — erring toward the fork when the task carries real ambiguity or a wide blast radius.
 
 ## Require a launchable contract
 
@@ -70,7 +87,15 @@ For harnesses with no automatic transport — ZCode, Claude Code, Cursor, plain 
 2. **Open the execution thread.** In ZCode: start a new session bound to the *same workspace directory*. In other harnesses: fork the conversation or open a fresh session in the same checkout.
 3. **Launch.** Paste the complete `SPEC READY` block into the new thread, then invoke `/spec-executor`. Say explicitly that this paste is the launch command.
 4. **Return the receipt.** When the executor finishes, bring its `SPEC EXECUTION RECEIPT` back to the planning thread — prefer referencing the execution session with `#sess_<id>` where the harness supports it (ZCode does) so the receipt arrives unedited; paste it where that is not possible. The receipt must still carry the `Schema: spec-executor-receipt/v2` first field on this route.
-5. **Close the loop.** Validate the receipt against the same six gates used for the automatic route (outcome completed, one parseable receipt, every criterion evidenced, no pending planning decisions, worktree and external effects reported). Ask once for `Goal / spec quality`; a skip does not block acceptance. Then settle the facts: a `Docs delta` other than `none` goes through `/domain-modeling` into `CONTEXT.md` or an ADR *now*, in the planning thread — a blank delta is an invalid receipt. Then harvest the telemetry exactly as on the automatic route: one row in `docs/metrics.md` (fill the `Quality` cell from the `Goal / spec quality` answer; leave it blank on a skip), and a `skill-friction` other than `none` becomes one entry in `docs/skill-friction-log.md`.
+5. **Run the gates mechanically, then close the loop.** The same six gates apply here as on the automatic route — outcome completed, one parseable receipt, single-token Conclusion, every criterion evidenced, no pending planning decisions, worktree and external effects reported. On this route nothing enforces them for you, because there is no transport doing it: run them rather than eyeballing them.
+
+   ```bash
+   node <repo>/scripts/receipt-gate.mjs --receipt <receipt-file> --checkout <project-dir>
+   ```
+
+   `--checkout` is not optional in spirit. Gate 6 compares the receipt's claimed final state against a real worktree, and by default that is wherever the validator was invoked from — which is meaningless on a manual route where the validator, the plugin, and the checkout under review are three different places. Pass the `--receipt -` form when the receipt arrives on a pipe instead of a file. Use `--check` when you want to confirm your copy of the validator still agrees with `contracts/receipt-v2.json`.
+
+   Six PASS lines is the gate result; anything else is a bounce, not a judgement call. Then ask once for `Goal / spec quality`; a skip does not block acceptance. Then settle the facts: a `Docs delta` other than `none` goes through `/domain-modeling` into `CONTEXT.md` or an ADR *now*, in the planning thread — a blank delta is an invalid receipt. Then harvest the telemetry exactly as on the automatic route: one row in `docs/metrics.md` (fill the `Quality` cell from the `Goal / spec quality` answer; leave it blank on a skip), and a `skill-friction` other than `none` becomes one entry in `docs/skill-friction-log.md`.
 
 The single-active-execution-thread guard applies on this route too: do not open a second execution session on the same checkout while one is running, and keep implementation edits out of the planning thread until the receipt has landed.
 

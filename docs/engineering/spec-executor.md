@@ -12,6 +12,7 @@ You invoke this by typing `/spec-executor` — the agent won't reach for it on i
 |---|---|
 | Approved spec fits one implementation session in Codex App | Run [execute-spec-in-fork](https://github.com/opsbli/sam-skills/blob/main/docs/engineering/execute-spec-in-fork.md) |
 | Same contract without Codex task orchestration | Fork manually and run `spec-executor` |
+| Below the complexity floor — single-file mechanical edit, cheap validation, no open decision | Express lane: do it in the planning thread, close with `MINI RECEIPT`. Do not invoke this skill |
 | Spec requires several dependency-ordered slices | Use [to-tickets](https://aihero.dev/skills-to-tickets) |
 | Context is noisy or must cross agents without history | Compile a `to-goal` handoff |
 | Product decisions or the test seam remain open | Return to [to-spec](https://aihero.dev/skills-to-spec) |
@@ -19,6 +20,14 @@ You invoke this by typing `/spec-executor` — the agent won't reach for it on i
 ## Prerequisites
 
 The thread needs a final `SPEC READY` block or an explicitly identified approved spec. The implementation repository and its starting baseline must be available, and the spec must fit one reliable execution context.
+
+## Check the complexity floor first
+
+This skill produces the heavy artifact, and not every change deserves one. `spec-executor` checks the floor before anything else: a single-file or few-line mechanical edit, or an obvious fix following an established pattern, with cheap non-test validation at the seam and no open product decision, belongs on the **express lane** — done in the requesting thread and closed with a `MINI RECEIPT` whose first field is `Schema: mini-receipt/v1`.
+
+The lane is cheap, not unguarded. Three content lines, one machine-readable pin holding them together, and `mini-receipt-gate.mjs` validates four gates mechanically: `what changed` carries substance; `validation run` names something actually run, with `none` rejected outright because work with no cheap check failed the lane's own entry criteria; and every path claimed in `worktree state` really is dirty in the checkout. That last gate is one-directional — the tree may legitimately be dirtier than the receipt claims, since express work happens in a shared checkout — but claiming a change that never landed is caught.
+
+Padding those three honest lines out to eighteen fields is worse than skipping them. An eighteen-field receipt for a typo fabricates a goal, a review fixed point, and acceptance criteria for work that had none, and it makes the costly rituals look like ceremony — which is how people stop doing them for the work that genuinely needs them.
 
 ## Lock, execute, receipt
 
