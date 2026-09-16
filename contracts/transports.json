@@ -14,20 +14,12 @@
       "note": "Harness-specific tool names live only in this route's capability table."
     },
     {
-      "id": "fork-loop-mcp",
-      "detectionToken": "**fork-loop MCP**",
-      "routeHeading": "## ZCode automatic route",
-      "implementation": "scripts/fork-loop-mcp/server.mjs",
-      "decision": ".agents/adr/0005-zcode-fork-loop-mcp-mailbox.md",
-      "note": "The machine-locked route: spawn_execution / check_mailbox / ack_receipt."
-    },
-    {
       "id": "manual-runbook",
       "detectionToken": "**Neither**",
       "routeHeading": "## Manual fallback runbook",
       "implementation": null,
       "decision": null,
-      "note": "The honest fallback. A missing transport is named, never simulated."
+      "note": "The honest fallback, and now the only route outside Codex App. A missing transport is named, never simulated."
     }
   ]
 }

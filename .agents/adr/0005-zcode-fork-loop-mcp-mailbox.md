@@ -1,5 +1,7 @@
 # The ZCode fork loop is a second real adapter: an MCP mailbox plus a Stop hook
 
+**Status:** superseded by [ADR 0007](0007-retire-the-fork-loop-transport.md) (2026-09-15). Kept unedited below as the record of what was decided and why; the `Push` row of the capability table is the claim that did not hold on ZCode 0.16.5.
+
 The fork loop (`SPEC READY` → execution → `RECEIPT v1` back) has two shapes today: the Codex App adapter (`execute-spec-in-fork`, ADR 0003) and the manual runbook for everything else. ZCode users live on the manual runbook, and its three human steps — open a session, paste the launch command, carry the receipt back — are the loop's least reliable links. This ADR records a **second real adapter** that closes the loop on ZCode without simulating Codex: a small MCP service (`fork-loop-mcp`) plus one `Stop` hook.
 
 ## What ZCode lacks and what fills it

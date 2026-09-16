@@ -9,15 +9,6 @@
   "homepage": "https://github.com/opsbli/sam-skills",
   "repository": "https://github.com/opsbli/sam-skills",
   "license": "MIT",
-  "mcpServers": {
-    "fork-loop": {
-      "type": "stdio",
-      "command": "node",
-      "args": [
-        "${ZCODE_PLUGIN_ROOT}/scripts/fork-loop-mcp/server.mjs"
-      ]
-    }
-  },
   "keywords": [
     "engineering",
     "skills",

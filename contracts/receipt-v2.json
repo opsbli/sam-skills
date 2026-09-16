@@ -4,7 +4,7 @@
   "heading": "SPEC EXECUTION RECEIPT",
   "conclusionTokens": ["completed", "blocked", "failed"],
   "$conclusionSemantics": "One single token on the first line; a justification sentence may follow on the next line. `completed` is the only outcome archive gate 1 admits. Partial work is reported as `blocked` (with the remainder listed) — never as a two-word token, which gate 3 rejects by design.",
-  "$fieldsComment": "The exhaustive set of lines that start a new field. The parser needs it because an Acceptance criteria entry is shaped exactly like a field (`- AC1: …`): without this list the criteria block ended at the first entry and gate 4 graded the wrong text — silently, since every later field still parsed. A receipt field that is missing here is read as a continuation of the previous field, so this list and the launch prompt in scripts/fork-loop-mcp/server.mjs must agree.",
+  "$fieldsComment": "The exhaustive set of lines that start a new field. The parser needs it because an Acceptance criteria entry is shaped exactly like a field (`- AC1: …`): without this list the criteria block ended at the first entry and gate 4 graded the wrong text — silently, since every later field still parsed. A receipt field that is missing here is read as a continuation of the previous field, so this list and the launch prompt in skills/engineering/spec-executor/SKILL.md must agree.",
   "fields": [
     "Schema",
     "Conclusion",
@@ -74,17 +74,6 @@
     },
     {
       "path": "scripts/receipt-gate.test.mjs",
-      "required": true,
-      "mustContain": ["Schema: {schema}"]
-    },
-    {
-      "path": "scripts/fork-loop-mcp/server.mjs",
-      "required": true,
-      "mustContain": ["Schema: {schema}", "SPEC EXECUTION RECEIPT"],
-      "mustNotContain": ["partially completed"]
-    },
-    {
-      "path": "scripts/fork-loop-mcp/test/mailbox-cycle.test.mjs",
       "required": true,
       "mustContain": ["Schema: {schema}"]
     },

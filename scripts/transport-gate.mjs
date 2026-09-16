@@ -84,27 +84,27 @@ function selfCheck() {
   const fixtures = [
     {
       name: "complete skill passes",
-      skill: `${"# Title\n\n"}## Pick the transport (detect in this order)\n\n1. **Codex App**: a\n2. **fork-loop MCP**: b\n3. **Neither**: c\n\n## Codex App route\nx\n\n## ZCode automatic route\ny\n\n## Manual fallback runbook\nz\n`,
+      skill: `${"# Title\n\n"}## Pick the transport (detect in this order)\n\n1. **Codex App**: a\n2. **Neither**: c\n\n## Codex App route\nx\n\n## Manual fallback runbook\nz\n`,
       registry: { detectionList: { heading: "## Pick the transport (detect in this order)" }, transports: baseTransports() },
       want: 0,
     },
     {
       name: "a transport with no route section is caught",
-      skill: `${"# Title\n\n"}## Pick the transport (detect in this order)\n\n1. **Codex App**: a\n2. **fork-loop MCP**: b\n3. **Neither**: c\n\n## Codex App route\nx\n\n## ZCode automatic route\ny\n`,
+      skill: `${"# Title\n\n"}## Pick the transport (detect in this order)\n\n1. **Codex App**: a\n2. **Neither**: c\n\n## Codex App route\nx\n`,
       registry: { detectionList: { heading: "## Pick the transport (detect in this order)" }, transports: baseTransports() },
       want: 1,
     },
     {
-      // Two independent complaints: the list is short one option, and the third
-      // transport's token therefore never appears.
+      // Two independent complaints: the list is short one option, and the
+      // manual route's token therefore never appears.
       name: "a detection count that disagrees is caught",
-      skill: `${"# Title\n\n"}## Pick the transport (detect in this order)\n\n1. **Codex App**: a\n2. **fork-loop MCP**: b\n\n## Codex App route\nx\n\n## ZCode automatic route\ny\n\n## Manual fallback runbook\nz\n`,
+      skill: `${"# Title\n\n"}## Pick the transport (detect in this order)\n\n1. **Codex App**: a\n\n## Codex App route\nx\n\n## Manual fallback runbook\nz\n`,
       registry: { detectionList: { heading: "## Pick the transport (detect in this order)" }, transports: baseTransports() },
       want: 2,
     },
     {
       name: "a missing detection token is caught",
-      skill: `${"# Title\n\n"}## Pick the transport (detect in this order)\n\n1. **Codex App**: a\n2. **fork-loop MCP**: b\n3. **Whatever**: c\n\n## Codex App route\nx\n\n## ZCode automatic route\ny\n\n## Manual fallback runbook\nz\n`,
+      skill: `${"# Title\n\n"}## Pick the transport (detect in this order)\n\n1. **Codex App**: a\n2. **Whatever**: c\n\n## Codex App route\nx\n\n## Manual fallback runbook\nz\n`,
       registry: { detectionList: { heading: "## Pick the transport (detect in this order)" }, transports: baseTransports() },
       want: 1,
     },
@@ -131,7 +131,6 @@ function selfCheck() {
 function baseTransports() {
   return [
     { id: "codex-app", detectionToken: "**Codex App**", routeHeading: "## Codex App route" },
-    { id: "fork-loop-mcp", detectionToken: "**fork-loop MCP**", routeHeading: "## ZCode automatic route" },
     { id: "manual-runbook", detectionToken: "**Neither**", routeHeading: "## Manual fallback runbook" },
   ];
 }

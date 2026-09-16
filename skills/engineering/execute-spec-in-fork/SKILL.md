@@ -1,6 +1,6 @@
 ---
 name: execute-spec-in-fork
-description: "Orchestrate one approved SPEC READY through an automatic execution thread and return evidence to the planning thread. Three transports, detected in order: Codex App native task tools + codex-task-messenger (fork_thread/Messenger), the fork-loop MCP server (ZCode and any harness with it connected — spawn_execution/mailbox), or the manual fork plus spec-executor runbook. Use only when the user explicitly asks to execute an approved spec, or when handling a reply, resume, or recovery event for an execution this skill launched. Work below the complexity floor (single-file mechanical edits or obvious fixes, no open product decision) takes the express lane — inline completion with a three-line mini receipt, no fork."
+description: "Orchestrate one approved SPEC READY through an automatic execution thread and return evidence to the planning thread. Two transports, detected in order: Codex App native task tools + codex-task-messenger (fork_thread/Messenger), or the manual fork plus spec-executor runbook. Use only when the user explicitly asks to execute an approved spec, or when handling a reply, resume, or recovery event for an execution this skill launched. Work below the complexity floor (single-file mechanical edits or obvious fixes, no open product decision) takes the express lane — inline completion with a three-line mini receipt, no fork."
 ---
 
 # Execute Spec in Fork
@@ -10,10 +10,9 @@ Turn one approved `SPEC READY` into a disposable execution task. Keep product de
 ## Pick the transport (detect in this order)
 
 1. **Codex App**: native task tools (`fork_thread`, `read_thread`, `set_thread_archived`) and `/codex-task-messenger` v2+ are both present → the Messenger route below.
-2. **fork-loop MCP**: a connected MCP server exposes `spawn_execution` / `check_mailbox` / `ack_receipt` (check via the harness MCP list or a `check_mailbox` probe) and the workspace Stop hook is registered → the ZCode automatic route below.
-3. **Neither** → the manual fallback runbook below. Never simulate a transport.
+2. **Neither** → the manual fallback runbook below. Never simulate a transport.
 
-All three share one contract: `SPEC READY` in, one `SPEC EXECUTION RECEIPT` out, the same six archive gates, the same Docs delta settlement and telemetry harvest.
+Both share one contract: `SPEC READY` in, one `SPEC EXECUTION RECEIPT` out, the same six archive gates, the same Docs delta settlement and telemetry harvest.
 
 ## Express lane — below the complexity floor, do not fork
 
@@ -34,25 +33,20 @@ Before creating anything:
 
 If no transport matches, do not create a plain new task or simulate one. Name the missing capability, then hand the user the manual fallback runbook below — never a dead end. After the receipt is pasted, ask once for `Goal / spec quality`; a skipped answer does not block using the receipt.
 
-## ZCode automatic route (fork-loop-mcp)
+## When a run delivers work but no receipt
 
-When the `fork-loop` MCP server is connected and the workspace's Stop hook is configured (setup: `scripts/fork-loop-mcp/README.md`; decision: [ADR 0005](../../../.agents/adr/0005-zcode-fork-loop-mcp-mailbox.md)), this is the transport — one manual step, and the planning session stays usable throughout.
+The six archive gates key on one parseable receipt, and a run can finish its work and then die before writing one. Verified once in the field: a ninety-minute run produced a complete, correct slice and then exited on an upstream model error, leaving no receipt at all. The deliverable was real; the archivable evidence was zero. Do not confuse that with a failed slice, and do not improvise a receipt to make the gates pass.
 
-1. **Spawn.** Call `spawn_execution` with the complete `SPEC READY` block as `spec_ready`, the workspace path as `checkout`, the current session id as `planner_session`, and a short non-sensitive `topic`. The service machine-locks the checkout (the single-active-execution-thread guard becomes mechanical — a second spawn fails naming the holder) and launches the headless runner. The call returns as soon as the runner has started, with `status: "running"` and a `task_id` — it deliberately does **not** wait for the run, so the exit code and the receipt are not in the tool result. They arrive with the mailbox entry, which is what step 2 is about.
-2. **Keep using the planning session.** Do not block or idle. The receipt is delivered by the Stop hook between turns: it injects the receipt as `additionalContext` and requests continuation. Treat the injected `[fork-loop]` block as the receipt arrival — jump straight to the six gates and the telemetry harvest below.
-3. **Settle.** After the six gates pass and a non-`none` `Docs delta` is settled through `/domain-modeling`, call `ack_receipt` with the injected `task_id` — that releases the checkout lock. Call `fail_receipt` instead when validation fails. If a runner is confirmed dead with no receipt arriving, `release_execution` is the recovery path. A run that is still alive but unwanted is `cancel_execution`'s job, not `release_execution`'s: dropping a live run's lock does not stop the run, it only admits a second execution onto the same checkout — so `release_execution` refuses that case and names `cancel_execution` instead. Never spawn a second execution while the lock stands.
+The worktree is then the whole of the evidence: the diff itself, whatever the execution thread left behind, and the failure record if one was written.
 
-The headless runner receives the `SPEC READY` contract, not the grill history — the same contract-level inheritance as the manual runbook. If the MCP server or the Stop hook is missing, fall back to the manual runbook below; do not simulate either half of the transport.
+**Never write, reconstruct, or hand-patch the missing receipt.** The `Schema` first field is the pin that stops a receipt from being assembled after the fact, and a reconstructed one is the precise failure the gates exist to catch. A run without a receipt is a run without a receipt.
 
-## Watch a long run
+Then close it honestly, with the human in the loop:
 
-A runner can take up to 90 minutes, and `spawn_execution` returns as soon as it starts — deliberately, so the planning turn is never held. The cost is a window with no receipt; check in rather than waiting blind, because a runner that is working and a runner that died on launch are otherwise indistinguishable until the timeout.
-
-- `check_status{checkout}` — one call: the task list (every run this checkout knows about, joined across the lock, the run journal and the mailbox) and the pipeline (planned work under `.scratch/`, including what has not started), then the derived phase, elapsed time, the lock holder plus whether the supervisor and runner processes are alive, the files touched in the last hour, the runner log tail, and the mailbox.
-- `node scripts/fork-loop-mcp/status.mjs --checkout <checkout>` — the same report in a terminal. `--watch` keeps it live, `--scan <dir>` covers several checkouts, `--require-idle` exits 3 when work is in flight.
-- `node scripts/fork-loop-mcp/dashboard.mjs --checkout <checkout>` — the web board, live on `127.0.0.1:7788`; `--snapshot <file>` writes a static page that can be published.
-
-Missing liveness evidence reads as `unknown`, never `alive` — an unrecorded runner pid is not a healthy run, and the report says so rather than guessing. A task's phase is derived from the same signals at both levels, so the board's headline and the task row under it cannot contradict each other.
+1. **Confirm the run is over.** If the execution thread is still working, this is not this section — wait for it or stop it, and leave the receipt question until it has actually stopped.
+2. **Judge the work on its merits, not on its paperwork.** The worktree diff is the artefact; `/code-review` against the pre-implementation fixed point does not need a receipt to run. Do not accept the work merely because it looks finished, and do not discard it merely because the receipt is missing.
+3. **Decide one of two things with the user:** accept the worktree as a human-reviewed completion *outside* the receipt contract, or re-run the slice (cheap when the slice is small — the field case above needed one slice, not the whole spec).
+4. **Record what happened, in the ledger, as what it was.** Append a `docs/metrics.md` row with `archive-gates: fail@2` (no single parseable receipt) and an honest `skill-friction` line naming what died. A row that claims `pass` for a run with no receipt makes the ledger unusable for exactly the question it exists to answer.
 
 ## Codex App route (Messenger)
 
@@ -68,9 +62,9 @@ This transport depends on Codex App's task tools by name. The names live here an
 
 Titling and pinning use the App's native task controls and are referred to by what they do.
 
-## Manual fallback runbook (no transport connected)
+## Manual fallback runbook (no automatic transport)
 
-For harnesses with neither transport — Claude Code, Cursor, plain terminals, or ZCode without fork-loop configured. It uses the same contract (`SPEC READY` in, `SPEC EXECUTION RECEIPT` out); only the transport changes to copy-paste.
+For harnesses with no automatic transport — ZCode, Claude Code, Cursor, plain terminals. It uses the same contract (`SPEC READY` in, `SPEC EXECUTION RECEIPT` out); only the transport changes to copy-paste.
 
 1. **Freeze the contract.** Stop the planning session at the final `SPEC READY` block. Do not keep discussing implementation in this thread — the whole point is that implementation logs stay out of the planning context.
 2. **Open the execution thread.** In ZCode: start a new session bound to the *same workspace directory*. In other harnesses: fork the conversation or open a fresh session in the same checkout.

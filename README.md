@@ -9,7 +9,6 @@
 [![Upstream](https://img.shields.io/badge/upstream-mattpocock%2Fskills%20v1.2.3-171717?style=flat-square)](https://github.com/mattpocock/skills)
 [![Fork](https://img.shields.io/badge/fork-v1.2.3--to--goal.3-F35B2A?style=flat-square)](https://github.com/opsbli/sam-skills)
 [![Receipt](https://img.shields.io/badge/receipt%20schema-v2-DCF23E?style=flat-square&labelColor=171717)](#demo一次完整闭环)
-[![ZCode](https://img.shields.io/badge/ZCode-fork--loop%20MCP-DCF23E?style=flat-square&labelColor=171717)](#demozcode-自动闭环装了-fork-loop与-codex-同款)
 [![License](https://img.shields.io/badge/license-MIT-DCF23E?style=flat-square&labelColor=171717)](LICENSE)
 
 `grill → spec ready → execute in fork → receipt returns`
@@ -28,7 +27,7 @@ AI coding 任务常常从需求讨论一路聊到代码实现。线程越长，�
 |---|---|
 | 方案讨论和代码实现挤在一个长线程里 | 规划线程停在 `SPEC READY`，fork 线程承担代码和测试日志 |
 | Fork 后又重新分析和改写一遍 Goal | `spec-executor` 直接执行继承的最终 Spec，并回传结构化 receipt |
-| Fork、启动和回传仍要手工串起来 | `execute-spec-in-fork` 自动选传输：Codex Messenger / ZCode fork-loop MCP（spawn + Stop 钩子推回）都是一次手动；未装则给手动 runbook |
+| Fork、启动和回传仍要手工串起来 | `execute-spec-in-fork` 自动选传输：Codex App 走 Messenger 自动闭环，其余 harness 给手动 runbook，一次粘贴不靠猜 |
 | 当前上下文太脏、无法可靠继承 | `to-goal` 把 ticket 和仓库证据压成干净的执行契约 |
 | 不同任务都使用同一档模型和推理强度 | goal 按风险推荐 Lightweight / Standard / Advanced 与推理强度 |
 | “做完了”依赖人的主观判断 | receipt 首字段带 `Schema` 版本，六道归档门机械校验，逐项证据 |
@@ -49,9 +48,9 @@ flowchart LR
     express --> mini["3 行 mini receipt"]
     route -- "一个执行会话" --> orchestrate["/execute-spec-in-fork<br/>自动选传输"]
     orchestrate -- "Codex App" --> fork["Fork + Messenger<br/>自动推回"]
-    orchestrate -- "ZCode + fork-loop" --> spawnmcp["spawn_execution<br/>MCP 信箱 + Stop 钩子推回"]
+    orchestrate -- "其他 harness" --> manual["手动 runbook<br/>同目录新会话 + 引用回流"]
     fork --> execute["实施<br/>/spec-executor"]
-    spawnmcp --> execute
+    manual --> execute
     execute --> receipt["摘要回流<br/>EXECUTION RECEIPT v2"]
     spec -. "多分片 / 跨上下文" .-> goal["压缩契约<br/>/to-tickets + /to-goal"]
     goal --> execute
@@ -66,11 +65,11 @@ flowchart LR
 
     class idea source;
     class grill,spec,route,settle,metrics,standards plan;
-    class orchestrate,fork,goal,express,mini,spawnmcp contract;
+    class orchestrate,fork,goal,express,mini,manual contract;
     class execute,receipt action;
 ```
 
-普通连续开发默认从最终 `SPEC READY` 处执行。多分片、并行、延迟执行或上下文混乱时，先用 `to-tickets` / `to-goal` 建立可独立执行的合同。**轻任务不进管线**：单文件机械改动或无歧义的明显修复、且无未决产品决策时，走轻量直通——在规划线程内完成，以 `改了什么 / 跑了什么验证 / 工作树状态` 三行 mini receipt 收尾；任一条件不满足即回到执行路由。回流 receipt 首字段携带 `Schema: spec-executor-receipt/v2`（含 `Receipt metrics` 遥测行），三条传输（Codex Messenger / ZCode fork-loop / 手动）都按同一组归档门机械校验。
+普通连续开发默认从最终 `SPEC READY` 处执行。多分片、并行、延迟执行或上下文混乱时，先用 `to-tickets` / `to-goal` 建立可独立执行的合同。**轻任务不进管线**：单文件机械改动或无歧义的明显修复、且无未决产品决策时，走轻量直通——在规划线程内完成，以 `改了什么 / 跑了什么验证 / 工作树状态` 三行 mini receipt 收尾；任一条件不满足即回到执行路由。回流 receipt 首字段携带 `Schema: spec-executor-receipt/v2`（含 `Receipt metrics` 遥测行），两条传输（Codex Messenger / 手动 runbook）都按同一组归档门机械校验。
 
 ## 使用步骤
 
@@ -89,7 +88,7 @@ codex plugin add sam-skills@opsbli
 npx skills@latest add opsbli/sam-skills
 ```
 
-安装即含 **fork-loop 自动闭环**（ZCode 用）：插件 manifest 自带 `fork-loop` MCP 服务与 `Stop` 回流钩子，指向插件内的 `scripts/fork-loop-mcp/`，无需任何独立部署或 zai 账号。唯一的额外一次性动作：headless 执行会话要有可用的模型 provider——在 `~/.zcode/cli/config.json` 里配好你自己的供应商（`provider.<id>.options.{baseURL, apiKey}` + `model.main: "<provider>/<模型 id>"` 字符串），执行会话就花它的额度（详见 [fork-loop-mcp README](./scripts/fork-loop-mcp/README.md) 与 [ADR 0005](./.agents/adr/0005-zcode-fork-loop-mcp-mailbox.md)）。
+插件是**纯技能载荷**：不含 MCP 服务，也不注册任何 hook，装完即用，无需独立部署。ZCode 与其他没有原生任务工具的 harness 走手动 runbook（见第 2 步）；退役的 ZCode 自动传输（`fork-loop-mcp`）的决策与理由见 [ADR 0007](./.agents/adr/0007-retire-the-fork-loop-transport.md)。
 
 然后在目标项目里**按顺序跑两个一次性命令**：
 
@@ -115,13 +114,12 @@ npx skills@latest add opsbli/sam-skills
 ```text
 /execute-spec-in-fork   ← 默认。skill 自动选传输（按序检测）：
                            ① Codex App 任务工具 → Messenger 自动闭环
-                           ② fork-loop MCP 已连接 → spawn 自动闭环（ZCode 同款体验）
-                           ③ 都没有 → 手动 runbook
+                           ② 其余 harness → 手动 runbook
 /to-tickets → /to-goal  ← 多分片、跨天、跨人、并行或上下文混乱
 轻量直通                 ← 单文件机械改动 / 明显修复，无未决产品决策
 ```
 
-Codex App 里全自动（fork → Messenger Ask → 等回执 → 校验 → 归档）。**ZCode 想要同款自动闭环，需一次性装上 fork-loop MCP + Stop 钩子**——sam-skills 插件已自带（见第 0 步安装），装好后 `/execute-spec-in-fork` 自动走 spawn 路由：agent 调 `spawn_execution`，执行会话后台跑、规划线程照常可用，receipt 由 Stop 钩子自动送回。什么都没装时走手动 runbook：同目录新会话 → 粘贴 `SPEC READY` → `/spec-executor` → receipt 用 `#sess_<id>` 引用回流。
+Codex App 里全自动（fork → Messenger Ask → 等回执 → 校验 → 归档）。其余 harness（ZCode、Claude Code、Cursor、终端）走手动 runbook：规划线程冻结在 `SPEC READY` → 同目录新会话粘贴全文 → `/spec-executor` → receipt 用 `#sess_<id>` 引用回流。
 
 ### 第 3 步：执行（执行线程）
 
@@ -169,15 +167,15 @@ SPEC READY
 - Next route: fork + /spec-executor
 ```
 
-**③ 规划线程 —— `/execute-spec-in-fork`**（skill 自动选传输；ZCode 装了 fork-loop 走 spawn，未装走手动 runbook）
+**③ 规划线程 —— `/execute-spec-in-fork`**（skill 自动选传输：Codex App 走 Messenger，其余走手动 runbook）
 
 ```text
-自动（fork-loop MCP，一次手动）：
-1. agent 调 spawn_execution(checkout, spec_ready, planner_session)
-2. 执行会话后台跑，规划线程照常可用
-3. Stop 钩子把 receipt 自动送回 → 过六道门 → 沉淀 Docs delta → ack_receipt 归档
+Codex App（Messenger，一次手动）：
+1. 同目录 fork 当前任务 → 拿到子任务 ID → 命名 → 发 Messenger Ask 启动
+2. 执行子任务后台跑，规划线程照常可用
+3. 子任务把 completed Reply 推回 → 过六道门 → 沉淀 Docs delta → 归档
 
-手动（未装 fork-loop）：
+其他 harness（手动 runbook）：
 1. 规划线程冻结在 SPEC READY，不再讨论实现
 2. 同目录开新会话（继承同一 workspace）
 3. 粘贴 SPEC READY，声明这是启动命令，运行 /spec-executor
@@ -232,9 +230,7 @@ SPEC EXECUTION RECEIPT
 
 还是「weekly-report 加 `--since`」这个任务，这次把镜头对准 ZCode 里的**两个会话**。全程你只有三次手动操作（标 🔧），其余都是 agent 自动完成。
 
-> 这是**未配置 fork-loop 自动闭环时**的手动路由（Claude Code / Cursor / 终端同样适用）。ZCode 装好 sam-skills 插件后，请直接看下一个 demo 的三行口令——同样的自动闭环体验。
-
-> 这是**未装 fork-loop MCP 时**的手动路由。装好后（插件自带）ZCode 升级为一次手动的自动闭环，见下面 Codex demo 的口令速查表。
+> 这是 ZCode、Claude Code、Cursor 与终端共用的手动路由——插件不注册任何 hook，所以除 Codex App 外的 harness 都走这一条。
 
 ### 会话 A · 规划线程（你的主会话）
 
@@ -313,26 +309,6 @@ agent：1. 经 #sess_7f3a9c 读取 receipt 原文（不经粘贴，无编辑损�
 
 > 💡 把「grill 收敛后默认 `/to-spec` 封版，而非直接实施」写进项目根的 `AGENTS.md` 后，连「先封版」这句提醒都可以省掉——agent 每次开工都会读到这条纪律。
 
-## Demo：ZCode 自动闭环（装了 fork-loop，与 Codex 同款）
-
-**ZCode 装好 sam-skills 插件后**（manifest 自带 fork-loop MCP + Stop 钩子），同样只用一次手动。唯一的准备：在 `~/.zcode/cli/config.json` 配好自己的模型 provider（第三方 OpenAI-compatible 端点即可，不需要 zai 账号）——执行会话花它的额度。
-
-### 规划会话（你唯一的会话）
-
-```text
-你：/grill-me 周报脚本现在统计全部历史，我想只看最近一段。
-agent：烤问 → 收敛 → 定稿方案
-你：先 /to-spec 封版。
-你：/execute-spec-in-fork   ← skill 检测到 fork-loop MCP，自动走 spawn 路由
-agent：调 spawn_execution(checkout, spec_ready, planner_session) — checkout 被机器锁定
-       （此时执行会话已在后台跑，你可以继续用本会话聊别的）
-       ……Stop 钩子在回合结束时从信箱取出 receipt，自动注入并继续：
-agent：1. 过六道归档门：Schema ✓ completed ✓ 逐条证据 ✓ 无待决决策 ✓ 工作树一致 ✓
-       2. Docs delta ≠ none → /domain-modeling 沉淀进事实文档
-       3. 收割 docs/metrics.md 一行 + skill-friction（如非 none）
-       4. ack_receipt → 锁释放，闭环完成
-```
-
 ## Demo：Codex App 全自动闭环（一键编排）
 
 还是「weekly-report 加 `--since`」这个任务，看同一条管线在 Codex App 里如何走完。前提：Codex App 原生任务工具可用，且已安装 [Codex Task Messenger](https://github.com/tt-a1i/codex-task-messenger)（v2+）。
@@ -391,10 +367,9 @@ agent：1. 关联校验：Reply 来自本次创建的子任务、reply-to 匹配
 | 环境 | 你要敲的（按顺序） | 手动次数 |
 |---|---|---|
 | **Codex App** | `/grill-me …` → `先 /to-spec 封版` → `/execute-spec-in-fork` →（等 Reply；有 needs-input 就回答） | **1 次** |
-| **ZCode（装了 fork-loop）** | `/grill-me …` → `先 /to-spec 封版` → `/execute-spec-in-fork`（agent 调 `spawn_execution`，receipt 由 Stop 钩子自动送回） | **1 次** |
-| **ZCode / 其他（未装）** | A：`/grill-me …` → `先 /to-spec 封版` → `执行完了，receipt 在 #sess_<id>`；B：粘贴 SPEC READY + `以上是启动命令。/spec-executor` | 3 次 |
+| **ZCode / Claude Code / Cursor / 终端** | A：`/grill-me …` → `先 /to-spec 封版` → `执行完了，receipt 在 #sess_<id>`；B：粘贴 SPEC READY + `以上是启动命令。/spec-executor` | 3 次 |
 
-三条路由的契约完全相同（`SPEC READY` 进、`RECEIPT v2` 出、六道门、Docs delta 沉淀），区别只在传输：Codex 用 Messenger 卡片推回，ZCode 装了 fork-loop 用 MCP 信箱 + Stop 钩子推送，未装则用 `#sess_<id>` 引用人工带回。
+两条路由的契约完全相同（`SPEC READY` 进、`RECEIPT v2` 出、六道门、Docs delta 沉淀），区别只在传输：Codex App 用 Messenger 卡片推回，其余 harness 靠 `#sess_<id>` 引用人工带回。
 
 ## Demo：轻量直通（Express lane）
 
@@ -469,7 +444,7 @@ MINI RECEIPT
 | 想让 agent 停止猜项目规矩，把骨架/迁移/验证底线固化成文 | `/project-standards`（`generate`：无文件；`update`：规则变了；`audit`：检查代码是否还在遵守） |
 | 需求还模糊，需要先聊清楚 | `/grill-me` 或 `/grill-with-docs` |
 | 方案已明确，准备形成可执行 Spec | `/to-spec` |
-| Spec 已批准、当前对话清晰、可以立刻开发 | `/execute-spec-in-fork`（推荐，skill 自动选传输：Codex Messenger / ZCode fork-loop / 手动 runbook） |
+| Spec 已批准、当前对话清晰、可以立刻开发 | `/execute-spec-in-fork`（推荐，skill 自动选传输：Codex App 任务工具 / 手动 runbook） |
 | Spec 太大，需要拆成多个可执行分片 | `/to-tickets` |
 | 当前 frontier 已就绪，但要跨线程、跨天或跨 harness 执行 | `/to-goal` |
 | 明确指定要把多个 ticket 合成一个跨上下文 goal | `/to-goal --all` |
@@ -499,7 +474,7 @@ MINI RECEIPT
 - `SPEC EXECUTION RECEIPT` 首字段为 `Schema: spec-executor-receipt/v2`；缺失或版本不符即视为校验失败，不人工补写。v2 必带 `Receipt metrics` 行（路由、归档门结果、grill 轮数、证据计数、`skill-friction`），规划线程在归档前收割进 `docs/metrics.md` 与 `docs/skill-friction-log.md`。
 - goal 不会默认授权 push、PR、merge、关闭 issue 或修改 tracker。
 - `spec-executor` 把规划线程当作唯一产品事实来源，不重新打开已确认决策；`Docs delta` 是它的回报义务——执行中发现的新约束、新术语和自决偏差必须显式回流，空白即缺陷。
-- `execute-spec-in-fork` 按序自动选传输：Codex App 任务工具（Messenger）→ fork-loop MCP（spawn + Stop 钩子）→ 手动 runbook。没有可用传输时明确说出缺失能力并交出手动 runbook，绝不假装传输存在。
+- `execute-spec-in-fork` 按序自动选传输：Codex App 任务工具（Messenger）→ 手动 runbook。没有可用传输时明确说出缺失能力并交出手动 runbook，绝不假装传输存在。
 
 ## 与上游 mattpocock/skills 的差异
 
@@ -507,7 +482,7 @@ MINI RECEIPT
 
 - 同步基线：上游 `main` 的 `6654f6b`（2026-08-24），发行序列见 [CHANGELOG.md](./CHANGELOG.md)。
 - 新增执行闭环：[`spec-executor`](./skills/engineering/spec-executor/SKILL.md) + [`execute-spec-in-fork`](./skills/engineering/execute-spec-in-fork/SKILL.md)，把 `SPEC READY → 执行 → receipt → 条件归档` 变成一等流程；receipt 强制 `Docs delta` 回流事实文档，首字段带 `Schema` 版本供机械校验；轻任务有 Express lane（[ADR 0003](./.agents/adr/0003-codex-app-fork-loop-is-an-adapter.md)、[ADR 0004](./.agents/adr/0004-receipt-schema-and-express-lane.md)）。
-- 新增 ZCode 自动传输：[`fork-loop-mcp`](./scripts/fork-loop-mcp/README.md)（MCP spawn + 信箱 + Stop 钩子推送）随插件分发，ZCode 与 Codex App 同享一次手动的自动闭环，执行会话可跑任意第三方 provider（[ADR 0005](./.agents/adr/0005-zcode-fork-loop-mcp-mailbox.md)）。
+- 退役 ZCode 自动传输：`fork-loop-mcp`（MCP spawn + 信箱 + Stop 钩子推送）曾作为第二条自动路由，因该 harness 不从本插件读取 hook、推送半边不成立，已在发行前整体退役（[ADR 0007](./.agents/adr/0007-retire-the-fork-loop-transport.md) 取代 [ADR 0005](./.agents/adr/0005-zcode-fork-loop-mcp-mailbox.md)）。
 - 新增决策与标准工具：[`roundtable`](./skills/engineering/roundtable/SKILL.md)（对立视角子代理辩论已成形决策）、[`project-standards`](./skills/engineering/project-standards/SKILL.md)（从真实代码探索生成可执行工程标准）。
 - 新增知识回收与评测：[`harvest`](./skills/engineering/harvest/SKILL.md)（回执遥测与评测失败 → 技能修订提案，人工批准后落盘）+ [`docs/evals/`](./docs/evals/README.md)（核心管线 8 个黄金任务与记分板，收敛从理念变成证据）。
 - 新增跨线程执行合同：[`to-goal`](./skills/engineering/to-goal/SKILL.md) + [`goal-crafter`](./skills/engineering/goal-crafter/SKILL.md)，把 tracker 上的当前 frontier 编译为可验证、可携带、可恢复的执行目标。

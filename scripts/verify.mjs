@@ -17,9 +17,8 @@
 //
 // A file listed in TESTS is checked for shape before it is run. `node --test`
 // reports a file that registers no tests as one passing test, so a suite with
-// zero assertions is green forever — mailbox-cycle.test.mjs spent its whole life
-// that way while wired into this very list. Counting passing tests cannot catch
-// that, so the shape is asserted instead.
+// zero assertions is green forever. Counting passing tests cannot catch that,
+// so the shape is asserted instead.
 //
 // Deliberately NOT in this list: `lint-skills.mjs --diff-audit upstream/main`
 // (npm run verify:upstream) — it needs a fetched upstream ref and full history,
@@ -98,10 +97,6 @@ const GUARDS = [
 const TESTS = [
   { id: "test-receipt-gate", label: "receipt gate synthetic-error coverage", file: "scripts/receipt-gate.test.mjs" },
   { id: "test-coupling-gate", label: "coupling gate self-test", file: "scripts/test-coupling-gate.test.mjs" },
-  { id: "test-mailbox-cycle", label: "fork-loop mailbox cycle", file: "scripts/fork-loop-mcp/test/mailbox-cycle.test.mjs" },
-  { id: "test-stop-hook", label: "fork-loop stop hook delivery", file: "scripts/fork-loop-mcp/test/stop-hook.test.mjs" },
-  { id: "test-runstate", label: "fork-loop read model (liveness, phases, activity)", file: "scripts/fork-loop-mcp/test/runstate.test.mjs" },
-  { id: "test-settlement", label: "receipt settlement + telemetry ledgers", file: "scripts/fork-loop-mcp/test/settlement.test.mjs" },
 ];
 
 const argv = process.argv.slice(2);
