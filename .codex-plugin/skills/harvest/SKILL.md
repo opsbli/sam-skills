@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 Close the loop from execution evidence back to the skills themselves. Every validated `SPEC EXECUTION RECEIPT` already lands telemetry in `docs/metrics.md` and friction in `docs/skill-friction-log.md`; `Goal / spec quality` labels are asked after each receipt and appended to the metrics row. This skill reads those ledgers, separates defects from noise, and turns confirmed defects into concrete revision proposals the human can approve, amend, or reject.
 
+The loop is only as strong as what it has actually run. This pipeline's ledgers are thin by comparison with its eval history, so in practice most confirmed defects arrive from `docs/evals/` rather than from receipts — see §1 before you read the ledgers as though they carried a full population.
+
 The one rule this skill inherits from `/project-standards`: **facts are found in the ledgers; revisions are confirmed by humans.** This skill never edits a `SKILL.md`, `AGENTS.md`, or any fact document on its own authority — its only write target is a draft-proposal file.
 
 ## Pick a mode
@@ -27,6 +29,14 @@ Read all four inputs; an absent ledger is an empty ledger, never an error:
 - `docs/skill-friction-log.md` — dated friction entries naming the skill that snagged;
 - the eval protocol and scoreboard under `docs/evals/` — a failing eval is a confirmed defect signal;
 - the current `SKILL.md` of every skill the evidence names, plus `AGENTS.md`/`CLAUDE.md` when the evidence points at standing instructions.
+
+**Know which input is actually load-bearing this week.** The reader above lists the ledgers first, but the pipeline has run very few times — check the row count in `docs/metrics.md` before trusting them, and say what you found in your summary. When there is only a handful of receipts:
+
+- the friction repeat-test ("same friction on 2+ receipts") **cannot yet fire on receipt evidence**, and pretending otherwise would mean drafting proposals that call one incident a pattern;
+- the eval scoreboard is therefore the primary input, not a supplement; a golden task that fails twice in a row is worth more than any single friction line, because it is reproducible;
+- a friction entry that cannot yet be repeated is still worth reading — the one whose failure mode *is itself the interesting fact* — but record it as a single occurrence and say that it is awaiting a second sighting rather than upgrading it.
+
+Re-run this check rather than assuming it has changed: the day `metrics.md` carries a real population, the ledgers become the primary source again, and a harvest run that still treats them as thin would be discarding the strongest evidence available.
 
 ### 2. Triage each signal
 
@@ -58,7 +68,7 @@ The `Change` field must be an edit a maintainer can apply mechanically — quote
 
 ### 4. Deliver
 
-End with a short summary: signals triaged, verdicts per signal, proposal files created, and the instruction that nothing has been edited yet — say `apply <file>` (or "apply both") after review to write the change.
+Write this run's triage ledger to `docs/evals/harvest-runs/YYYY-MM-DD-harvest-run-<slug>.md` — every signal you read, with its verdict and what you did about it, including the ones you dismissed. A signal dismissed without a recorded reason looks like one you missed, which is how the next run re-triages the same thing and calls it new. Then end with a short summary: signals triaged, verdicts per signal, proposal files created, and the instruction that nothing has been edited yet — say `apply <file>` (or "apply both") after review to write the change.
 
 ## apply — write an approved proposal
 
@@ -69,7 +79,7 @@ End with a short summary: signals triaged, verdicts per signal, proposal files c
 
 ## Boundaries
 
-- Write target is exactly one place: `docs/evals/draft-proposals/`. Never the skills directory, never `AGENTS.md`, never the ledgers.
+- **Two write targets, one per mode** — and the split is load-bearing. A `run` writes its triage ledger to `docs/evals/harvest-runs/`; proposals, and only proposals, go to `docs/evals/draft-proposals/`. A run record has no `Approved:` line, so sitting in `draft-proposals/` it reads as an unapproved proposal somebody forgot to finish — which is exactly what happened, twice. The separation means opening `draft-proposals/` shows *only things awaiting a decision*. Never write to the skills directory, never `AGENTS.md`, never the ledgers.
 - The ledgers are append-only upstream of this skill; harvest reads them, never prunes them. If the log has grown long, suggest the user archive old entries in a separate manual pass.
 - One proposal per defect. A "rewrite the whole skill" proposal is a signal the user should run `/grill-with-docs` on the skill instead — say so and stop.
 - Eval failures follow the same repeat-test: a golden task that fails twice in a row is a defect signal; one flaky failure is noise unless its failure mode is itself the interesting fact.

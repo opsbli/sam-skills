@@ -2,7 +2,7 @@
 
 `harvest` turns the spec-execution pipeline's own telemetry into skill-revision proposals. It reads `docs/metrics.md` and `docs/skill-friction-log.md` — the ledgers every validated receipt already feeds — plus the eval scoreboard, separates repeat defects from one-off noise, and drafts a concrete edit for each confirmed defect. It is the [knowledge-recovery](https://github.com/opsbli/sam-skills/blob/main/docs/evals/README.md) loop's closing step: execution evidence flows back into the skills themselves.
 
-The defining constraint: **nothing edits a skill file directly.** Every proposal lands as a file under `docs/evals/draft-proposals/` carrying an `Approved: no` line, and the skill refuses to apply any proposal that does not carry `Approved: yes`. Facts come from the ledgers; revisions are confirmed by humans.
+The defining constraint: **nothing edits a skill file directly.** Every proposal lands as a file under `docs/evals/draft-proposals/` carrying an `Approved: no` line, and the skill refuses to apply any proposal that does not carry `Approved: yes`. Facts come from the ledgers; revisions are confirmed by humans. Proposals are the only thing in that directory — a `/harvest run` writes its own triage ledger to `docs/evals/harvest-runs/`, so opening `draft-proposals/` shows nothing but decisions waiting to be made.
 
 ## When to reach for it
 
@@ -17,7 +17,13 @@ Type `/harvest` — the agent won't reach for it on its own.
 
 ## Prerequisites
 
-The pipeline must be running: `docs/metrics.md` and `docs/skill-friction-log.md` exist and are being appended per receipt. The eval scoreboard at `docs/evals/SCOREBOARD.md` is optional input — absent ledgers and an absent scoreboard are treated as empty, never as errors.
+The pipeline must be running: `docs/metrics.md` and `docs/skill-friction-log.md` exist and are being appended per receipt, with the eval scoreboard at `docs/evals/SCOREBOARD.md` as further input.
+
+Absent ledgers and an absent scoreboard are treated as empty, never as errors, so `/harvest` can run before the pipeline has produced anything. But check how much the ledgers actually hold before reading them as evidence.
+
+The reason is structural rather than pessimistic. The repeat-test needs 2+ receipts to fire, so with only one or two rows it cannot fire on receipt evidence at all — and the eval scoreboard becomes the input that matters, not a supplement. A golden task that fails twice is then worth more than any single friction line, because it is reproducible. This is visible in this repo's own history: every proposal drafted so far arrived from eval failures, while the receipt ledgers held a single row.
+
+That is a statement about today, not a permanent rule. When `docs/metrics.md` carries a real population, the ledgers go back to being the strongest evidence available — which is why `run` re-checks the row count each time instead of assuming.
 
 ## The repeat-test
 
